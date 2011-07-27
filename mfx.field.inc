@@ -122,6 +122,8 @@ function mfx_field_widget_form(&$form, &$form_state, $field, $instance, $langcod
         $targetElement = 'ajax_' . $elementName . '_' . $delta;
         $field_name = $element['#field_name'];
 
+        // store a copy of the name on form_state so it can be fetched back on _alter
+
         $element[$elementName] = array(
             '#field_name' => $elementName,
             '#type' => 'container',
@@ -170,15 +172,12 @@ function mfx_field_widget_form(&$form, &$form_state, $field, $instance, $langcod
             $flexinode = mfx_field_get_entity($items[$delta], $flexinodetype);
             if (is_object($flexinode)) {
                 flexinode_get_field_form($form_state, $element, $elementName, $flexinode, $delta, $field_name, $langcode, $parents);
-            } elseif ($ajaxtriggered && !empty($flexinodetype)) {
+                $form_state['#flexinodes'][$field_name][$delta] = array('entity' => $flexinode, 'subform' => $element);
+            } elseif ($ajaxtriggered && empty($flexinodetype)) {
                 // object was cleared, so remove from state
                 $field_state['entity'][$delta] = $flexinode;
-                $field_state['subform'][$delta] = $element[$elementName]['content'];
-                field_form_set_state($parents, $field_name, $langcode, $form_state, $field_state);
+                $field_state['subform'][$delta] = $element[$elementName];
             }
-        } elseif (isset($field_state[$delta])) {
-            // store cached object to form
-            $element += $field_state[$delta];
         }
         $return = $element;
     }
@@ -198,18 +197,8 @@ function flexinode_get_field_form(&$form_state, &$element, $elementName, $flexin
     );
 
     field_attach_form('flexinode', $flexinode, $element[$elementName]['content'], $form_state, $langcode);
-    // store a copy of the form and entity in the form_state
-    $field_state = field_form_get_state($parents, $field_name, $langcode, $form_state);
-    $field_state['entity'][$delta] = $flexinode;
-    $field_state['subform'][$delta] = $element[$elementName]['content'];
-    field_form_set_state($parents, $field_name, $langcode, $form_state, $field_state);
 }
 
-function mfx_form_alter(&$form, &$form_state) {
-    if ($form['#node_edit_form']) {
-        #sdpm($form);
-    }
-}
 
 function mfx_flexifield_widget_trigger_subform_ajax($form, &$form_state) {
     $element = $form_state['triggering_element'];
@@ -218,19 +207,27 @@ function mfx_flexifield_widget_trigger_subform_ajax($form, &$form_state) {
     return $subform;
 }
 
-function mfx_flexifield_widget_validate($element, &$form_state, &$form) {
+/*
+ * Validate per element aka attach the submitted values to the $form_state['values']
+ * $form is a bit strange, because it is not the real $form but $form_state['complete form']
+ * @see http://api.drupal.org/api/drupal/includes--form.inc/function/_form_validate/7
+ *
+ */
+function mfx_flexifield_widget_validate($element, &$form_state, $form) {
     if ($form_state['submitted']) {
         $element_name = reset($element['#parents']);
         $delta = $element['#delta'];
         $parents = array_merge($element['#parents'], array('content', '#fields', $element_name, $element['#language']));
         $field_state = drupal_array_get_nested_value($form_state['field']['#parents'], $parents);
-        
-        dpr($field_state);
+        $flexinode = $field_state['entity'][$delta];
+        if (is_object($flexinode)) {
+            #   echo $element_name;
+            $subform = $field_state['subform'][$delta];
+            field_attach_submit('flexinode', $flexinode, $subform, $form_state);
+            $subform['entity'] = $flexinode;
+            form_set_value($element, $subform, $form_state);
 
-        field_attach_submit('flexinode', $flexinode, $element, $form_state);
-        $item['entity'] = $flexinode;
-        form_set_value($element, $item, $form_state);
-        #dpr($field_state['#fields'][$element_name][$element['#language']]);
+        }
     }
 
 
@@ -269,8 +266,8 @@ function mfx_flexifield_widget_validate($element, &$form_state, &$form) {
 
 
 function mfx_flexifield_widget_submit(&$form, &$form_state) {
-    echo "values";
-    dpr($form_state['values']['field_flexi']['und']);
+    echo "submit";
+    # dpr($form_state['values']['field_flexi']['und']);
     exit();
 }
 
@@ -283,4 +280,19 @@ function mfx_field_get_entity(&$item, $type = NULL) {
         $item['entity'] = entity_create('flexinode', array('type' => $type));
     }
     return isset($item['entity']) ? $item['entity'] : FALSE;
+}
+
+function mfx_form_alter(&$form, &$form_state) {
+    if (isset($form_state['#flexinodes'])) {
+        foreach ($form_state['#flexinodes'] as $element => $parameters) {
+            $language = $form[$element]['#language'];
+            dpm($parameters);
+            //            foreach ($check as $delta => $fieldname) {
+            //                #dpm($form[$element][$language][$delta][$fieldname]);
+            //                $parents = array_merge($element['#parents'], array('content', '#fields', $fieldname, $language));
+            //                dpm($form_state['field']['#parents']);
+            //                #$field_state = drupal_array_get_nested_value($form_state['field']['#parents'], $parents);
+            //                #dpm($field_state);
+        }
+    }
 }
