@@ -45,26 +45,10 @@ function mfx_field_schema($field) {
                 'unsigned' => TRUE,
                 'not null' => TRUE,
             ),
-            'nid' => array(
-                'type' => 'int',
-                'unsigned' => TRUE,
-                'not null' => TRUE,
-            ),
-            'type' => array(
-                'type' => 'varchar',
-                'length' => 255,
-                'not null' => TRUE,
-            ),
         );
         return array(
             'columns' => $columns,
-            'indexes' => array('nid' => array('nid')),
-            'foreign keys' => array(
-                'nid' => array(
-                    'table' => 'node',
-                    'columns' => array('nid' => 'nid'),
-                ),
-            ),
+            'indexes' => array('flid' => array('flid')),
         );
     }
 }
@@ -112,7 +96,7 @@ function mfx_field_widget_info() {
             'settings' => array(),
             'behaviors' => array(
                 'multiple values' => FIELD_BEHAVIOR_DEFAULT,
-                'default value' => FIELD_BEHAVIOR_NONE, // no default values for this
+                'default value' => FIELD_BEHAVIOR_DEFAULT, // no default values for this
             ),
         )
     );
@@ -209,24 +193,28 @@ function mfx_flexifield_widget_trigger_subform_ajax($form, &$form_state) {
     return $subform;
 }
 
-
+/**
+ * implements hook_widget_validate().
+ *
+ * Besides validating, the embedded Flexinode is being saved to the database.
+ */
 function mfx_flexifield_widget_validate($element, &$form_state, $form) {
-    //    if ($form_state['submitted']) {
-    //        $element_name = reset($element['#parents']);
-    //        $delta = $element['#delta'];
-    //        $parents = array_merge($element['#parents'], array('content', '#fields', $element_name, $element['#language']));
-    //        $field_state = drupal_array_get_nested_value($form_state['field']['#parents'], $parents);
-    //        $flexinode = $field_state['entity'][$delta];
-    //        if (is_object($flexinode)) {
-    //            #   echo $element_name;
-    //            $subform = $field_state['subform'][$delta];
-    //            field_attach_submit('flexinode', $flexinode, $subform, $form_state);
-    //            $subform['entity'] = $flexinode;
-    //            form_set_value($element, $subform, $form_state);
-    //
-    //        }
-    //}
-
+    if ($form_state['submitted']) {
+        $delta = $element['#delta'];
+        $language = $element['#language'];
+        $fieldname = reset($element['#parents']);
+        /** @var $flexinode Flexinode */
+        $flexinode = (isset($form_state['#flexinodes'][$fieldname][$delta]['entity'])) ? $form_state['#flexinodes'][$fieldname][$delta]['entity'] : false;
+        // TODO move this to a hook_extract_form_values later!
+        if (is_object($flexinode)) {
+            $subform = $form_state['#flexinodes'][$fieldname][$delta]['subform'][$element['#field_name']]['content'];
+            $subform_values = $form_state['values'][$fieldname][$language][$delta][$element['#field_name']];
+            if ($flid = $flexinode->submit($subform, $subform_values)) {
+                array_pop($element['#parents']);
+                form_set_value($element, array('flid' => $flid), $form_state);
+            }
+        }
+    }
 
     //
     //
@@ -253,19 +241,11 @@ function mfx_flexifield_widget_validate($element, &$form_state, $form) {
     //            }
     //        }
     //    }
-
-    //    if ($form_state['submitted'] && !form_get_errors() && is_object($flexinode)) {
-    //        field_attach_submit('flexinode', $flexinode, $element, $form_state);
-    //        $item['entity'] = $flexinode;
-    //        form_set_value($element, $item, $form_state);
-    //    }
 }
 
 
 function mfx_flexifield_widget_submit(&$form, &$form_state) {
-    echo "submit";
-    dpr($form_state['values']['field_flexi']['und']);
-    exit();
+
 }
 
 

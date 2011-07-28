@@ -175,36 +175,45 @@ function mfx_form_field_ui_field_overview_form_alter($form, &$formstate, $form_i
     if ($form['#entity_type'] == 'flexinode') {
         unset($form['fields']['_add_new_field']['type']['#options']['flexifield']);
     }
-
-}
-
-/**
- * Implements hook extract_form_values($entity_type, $entity, $field, $instance, $langcode, &$items, $form, &$form_state) {
- * */
-
-function mfx_extract_form_values($entity_type, $entity, $field, $instance, $langcode, &$items, $form, &$form_state) {
-    $path = array_merge($form['#parents'], array($field['field_name'], $langcode));
-    $key_exists = NULL;
-    $values = drupal_array_get_nested_value($form_state['values'], $path, $key_exists);
-    if ($key_exists) {
-        // Remove the 'value' of the 'add more' button.
-        unset($values['add_more']);
-        $items = $values;
-    }
-    dpr($items);
 }
 
 /**
  * The class used for model entities
  */
 class Flexinode extends Entity {
+    public $is_new, $flid, $created, $changed;
 
     public function __construct($values = array()) {
         parent::__construct($values, 'flexinode');
     }
 
+    /**
+     * Handles the creating/updating for a embedded flexinode
+     * @param $form  The subform used to create this flexinode
+     * @param $form_values the values from $form_state['values'][flexi_container_{field_name}]['content'] for this flexinode
+     * @return $flid
+     */
+    public function submit($form, $form_values) {
+        unset($form_values['select']);
+        foreach ($form_values['content'] as $name => $value) {
+            $form_values[$name] = $value;
+        }
+        unset($form_values['content']);
+        $form_values = array('values' => $form_values);
+        entity_form_submit_build_entity($this->entityType, $this, $form, $form_values);
+        if ($this->is_new = isset($this->is_new) ? $this->is_new : 0) {
+            $this->created = time();
+        }
+        $this->changed = time();
+        $this->save();
+        return $this->flid;
+    }
+
     protected function defaultLabel() {
-        return 'Flexinode';
+        if (isset($this->type)) {
+            return t('Flexinode') . ' ' . $this->type;
+        }
+        return t('Flexinode');
     }
 
     protected function defaultUri() {
@@ -229,6 +238,7 @@ class FlexinodeType extends Entity {
         }
         parent::__construct($values, 'flexinode_type');
     }
+
 
 }
 
