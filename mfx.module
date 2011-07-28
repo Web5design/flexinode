@@ -190,18 +190,18 @@ class Flexinode extends Entity {
     /**
      * Handles the creating/updating for a embedded flexinode, moves the fields from ['content'] into the correct position
      * to be further processed and saved.
-     * @param $form  The subform used to create this flexinode
-     * @param $form_state 
-     * @return $flid
+     * The fields are already processed on the submission of the host form, so just copy and save.
+     *
+     * @param $form Array subform used to create this flexinode
+     * @param $form_state
+     * @return $flid PK of the newly created flexinode
      */
     public function submit($form, $form_state) {
-        $fields_needed = array_keys(field_info_instances($this->entityType, $this->type));
-        $form_state['input'] = array_diff_key($form_state['input']['content'],$fields_needed);
-        $form_state['values'] = array_diff_key($form_state['values']['content'],$fields_needed);
-        entity_form_submit_build_entity($this->entityType, $this, $form, $form_state);
+
         if ($this->is_new = isset($this->is_new) ? $this->is_new : 0) {
             $this->created = time();
         }
+        field_attach_submit($this->entityType, $this, $form, $form_state);
         $this->changed = time();
         $this->save();
         return $this->flid;

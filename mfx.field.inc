@@ -151,7 +151,7 @@ function mfx_field_widget_form(&$form, &$form_state, $field, $instance, $langcod
                 'progress' => array('type' => 'throbber'),
             )
         );
-        $parents = array_merge($element['#field_parents'], array('content'));
+        $parents = array_merge($element['#field_parents'], array($field_name, $langcode, $delta, $elementName, 'content'));
         // on AJAX callback add the embedded form into the widget for the current $delta
         $ajaxtriggered = (isset($form_state['triggering_element'])) ? true : false;
         $flexinodetype = (isset($form_state['triggering_element']["#value"])) ? $form_state['triggering_element']["#value"] : NULL;
@@ -204,14 +204,18 @@ function mfx_flexifield_widget_validate($element, &$form_state, $form) {
         $fieldname = reset($element['#parents']);
         /** @var $flexinode Flexinode */
         $flexinode = (isset($form_state['#flexinodes'][$fieldname][$delta]['entity'])) ? $form_state['#flexinodes'][$fieldname][$delta]['entity'] : false;
-        // TODO move this to a hook_extract_form_values later!
         if (is_object($flexinode)) {
             $subform = $form_state['#flexinodes'][$fieldname][$delta]['subform'][$element['#field_name']]['content'];
+            $subform['#delta'] = $delta;
             #$subform_values = $form_state['values'][$fieldname][$language][$delta][$element['#field_name']];
             if ($flid = $flexinode->submit($subform, $form_state)) {
+                $field_value = array('flid' => $flid);
                 array_pop($element['#parents']);
-                form_set_value($element, array('flid' => $flid), $form_state);
+                form_set_value($element, $field_value, $form_state);
             }
+        } else {
+            // nothing to save.
+            unset($form_state['values'][$fieldname][$language][$delta]);
         }
     }
 
@@ -244,8 +248,7 @@ function mfx_flexifield_widget_validate($element, &$form_state, $form) {
 
 
 function mfx_flexifield_widget_submit(&$form, &$form_state) {
- echo ('woot');
-dpr($form);
+    #dpr($form);
 }
 
 
@@ -254,7 +257,7 @@ dpr($form);
  */
 function mfx_field_get_entity(&$item, $type = NULL) {
     if (isset($item['flid'])) {
-        // todo load ;)
+        dpm('looaaad');
     }
     elseif (!isset($item['entity']) && isset($type)) {
         $item['entity'] = entity_get_controller('flexinode')->create(array('type' => $type));
