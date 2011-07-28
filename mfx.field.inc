@@ -69,6 +69,9 @@ function mfx_field_schema($field) {
     }
 }
 
+/**
+ * This form sets the parameters on a field level in the host entity.
+ */
 function mfx_field_settings_form($field, $instance, $has_data) {
     if ($field['type'] == 'flexifield') {
         $available_types = mfx_flexinode_get_types();
@@ -96,6 +99,10 @@ function mfx_field_is_empty($item, $field) {
     return false;
 }
 
+/**
+ * Implements hook_widget_info().
+ * @return array
+ */
 function mfx_field_widget_info() {
     return array(
         'mfx_flexifield_widget' => array(
@@ -111,7 +118,11 @@ function mfx_field_widget_info() {
     );
 }
 
-
+/**
+ * The actuall widget form itself, creates a $delta indexed container with a dropdown to select the
+ * flexinode to embed. This container is replaced trough a AJAX call with a new subform
+ * containing both the selector and the embedded form for the flexinode based on the $delta of the selector.
+ */
 function mfx_field_widget_form(&$form, &$form_state, $field, $instance, $langcode, $items, $delta, $element) {
     $return = false;
     if ($instance['widget']['type'] == 'mfx_flexifield_widget') {
@@ -121,9 +132,14 @@ function mfx_field_widget_form(&$form, &$form_state, $field, $instance, $langcod
         $elementName = 'flexi_container_' . $field['field_name'];
         $targetElement = 'ajax_' . $elementName . '_' . $delta;
         $field_name = $element['#field_name'];
-
-        // store a copy of the name on form_state so it can be fetched back on _alter
-
+        // get available flexinodes for this field.
+        $available_flexinode_types = array_map('check_plain', array_merge(array(null => t('none')), $field['settings']['referenceable_types']));
+        foreach ($available_flexinode_types as $key => $reference) {
+            if ($reference == '0') {
+                unset($available_flexinode_types[$key]);
+            }
+        }
+        // build the actual widget element.
         $element[$elementName] = array(
             '#field_name' => $elementName,
             '#type' => 'container',
@@ -136,13 +152,6 @@ function mfx_field_widget_form(&$form, &$form_state, $field, $instance, $langcod
             '#prefix' => '<div id="' . $targetElement . '">',
             '#suffix' => '</div>'
         );
-
-        $available_flexinode_types = array_map('check_plain', array_merge(array(null => t('none')), $field['settings']['referenceable_types']));
-        foreach ($available_flexinode_types as $key => $reference) {
-            if ($reference == '0') {
-                unset($available_flexinode_types[$key]);
-            }
-        }
 
         $element[$elementName]['select'] = array(
             '#delta' => $delta,
@@ -158,25 +167,31 @@ function mfx_field_widget_form(&$form, &$form_state, $field, $instance, $langcod
                 'progress' => array('type' => 'throbber'),
             )
         );
-
-        // embed on AJAX callback..
         $parents = array_merge($element['#field_parents'], array($field_name, $langcode, $delta, $elementName, 'content'));
 
+        // on AJAX callback add the embedded form into the widget for the current $delta
         $ajaxtriggered = (isset($form_state['triggering_element'])) ? true : false;
         $flexinodetype = (isset($form_state['triggering_element']["#value"])) ? $form_state['triggering_element']["#value"] : NULL;
         $triggeringdelta = (isset($form_state['triggering_element']['#delta'])) ? $form_state['triggering_element']['#delta'] : NULL;
-        $field_state = field_form_get_state($parents, $field_name, $langcode, $form_state);
-
-        // this is a new or to be changed form
         if ($triggeringdelta == $delta) {
             $flexinode = mfx_field_get_entity($items[$delta], $flexinodetype);
             if (is_object($flexinode)) {
-                flexinode_get_field_form($form_state, $element, $elementName, $flexinode, $delta, $field_name, $langcode, $parents);
+                $element[$elementName]['content'] = array(
+                    '#field_name' => 'content',
+                    '#delta' => $delta,
+                    '#type' => 'container',
+                    '#tree' => true,
+                    '#language' => $langcode,
+                    '#field_parents' => $parents,
+                    '#parents' => $parents,
+
+                );
+                field_attach_form('flexinode', $flexinode, $element[$elementName]['content'], $form_state, $langcode);
+                // store a copy of the entire widget to be restored in the form_alter hook below.
                 $form_state['#flexinodes'][$field_name][$delta] = array('entity' => $flexinode, 'subform' => $element);
             } elseif ($ajaxtriggered && empty($flexinodetype)) {
-                // object was cleared, so remove from state
-                $field_state['entity'][$delta] = $flexinode;
-                $field_state['subform'][$delta] = $element[$elementName];
+                // object was cleared, so it must be removed from form_state too.
+                unset($form_state['#flexinodes'][$field_name][$delta]);
             }
         }
         $return = $element;
@@ -184,22 +199,9 @@ function mfx_field_widget_form(&$form, &$form_state, $field, $instance, $langcod
     return $return;
 }
 
-function flexinode_get_field_form(&$form_state, &$element, $elementName, $flexinode, $delta, $field_name, $langcode, $parents) {
-    $element[$elementName]['content'] = array(
-        '#field_name' => 'content',
-        '#delta' => $delta,
-        '#type' => 'container',
-        '#tree' => true,
-        '#language' => $langcode,
-        '#field_parents' => $parents,
-        '#parents' => $parents,
-
-    );
-
-    field_attach_form('flexinode', $flexinode, $element[$elementName]['content'], $form_state, $langcode);
-}
-
-
+/**
+ * The actual AJAX callback, replaces the entire above created flexi_container_{field_name}
+ */
 function mfx_flexifield_widget_trigger_subform_ajax($form, &$form_state) {
     $element = $form_state['triggering_element'];
     array_pop($element['#parents']);
@@ -207,28 +209,23 @@ function mfx_flexifield_widget_trigger_subform_ajax($form, &$form_state) {
     return $subform;
 }
 
-/*
- * Validate per element aka attach the submitted values to the $form_state['values']
- * $form is a bit strange, because it is not the real $form but $form_state['complete form']
- * @see http://api.drupal.org/api/drupal/includes--form.inc/function/_form_validate/7
- *
- */
-function mfx_flexifield_widget_validate($element, &$form_state, $form) {
-    if ($form_state['submitted']) {
-        $element_name = reset($element['#parents']);
-        $delta = $element['#delta'];
-        $parents = array_merge($element['#parents'], array('content', '#fields', $element_name, $element['#language']));
-        $field_state = drupal_array_get_nested_value($form_state['field']['#parents'], $parents);
-        $flexinode = $field_state['entity'][$delta];
-        if (is_object($flexinode)) {
-            #   echo $element_name;
-            $subform = $field_state['subform'][$delta];
-            field_attach_submit('flexinode', $flexinode, $subform, $form_state);
-            $subform['entity'] = $flexinode;
-            form_set_value($element, $subform, $form_state);
 
-        }
-    }
+function mfx_flexifield_widget_validate($element, &$form_state, $form) {
+    //    if ($form_state['submitted']) {
+    //        $element_name = reset($element['#parents']);
+    //        $delta = $element['#delta'];
+    //        $parents = array_merge($element['#parents'], array('content', '#fields', $element_name, $element['#language']));
+    //        $field_state = drupal_array_get_nested_value($form_state['field']['#parents'], $parents);
+    //        $flexinode = $field_state['entity'][$delta];
+    //        if (is_object($flexinode)) {
+    //            #   echo $element_name;
+    //            $subform = $field_state['subform'][$delta];
+    //            field_attach_submit('flexinode', $flexinode, $subform, $form_state);
+    //            $subform['entity'] = $flexinode;
+    //            form_set_value($element, $subform, $form_state);
+    //
+    //        }
+    //}
 
 
     //
@@ -267,11 +264,14 @@ function mfx_flexifield_widget_validate($element, &$form_state, $form) {
 
 function mfx_flexifield_widget_submit(&$form, &$form_state) {
     echo "submit";
-    # dpr($form_state['values']['field_flexi']['und']);
+    dpr($form_state['values']['field_flexi']['und']);
     exit();
 }
 
 
+/**
+ * create or returns the entity for the embedded form.
+ */
 function mfx_field_get_entity(&$item, $type = NULL) {
     if (isset($item['flid'])) {
         // todo load ;)
@@ -282,17 +282,32 @@ function mfx_field_get_entity(&$item, $type = NULL) {
     return isset($item['entity']) ? $item['entity'] : FALSE;
 }
 
+/**
+ * Implements hook_form_alter().
+ *
+ * Drupal uses a static stack to keep track of the current form, however since the form is changed trough
+ * AJAX multiple times, that gave some issues. PHP is stateless, and drupal static is not saved anywwere the
+ * content of the static is lost between ajax calls. However the form_state is being passed around as
+ * refference everywhere and even kept in the form cache, we rebuild the current form by sneeking in
+ * the elements within the form_alter so that on submission all the form_state['fields'] should be present.
+ *
+ */
 function mfx_form_alter(&$form, &$form_state) {
     if (isset($form_state['#flexinodes'])) {
+        $triggerdelta = false;
+        $triggerelement = false;
+        if (isset($form_state['triggering_element'])) {
+            $triggerdelta = $form_state['triggering_element']['#delta'];
+            $triggerelement = $form_state['triggering_element']['#delta']['#parents'][0];
+        }
         foreach ($form_state['#flexinodes'] as $element => $parameters) {
-            $language = $form[$element]['#language'];
-            dpm($parameters);
-            //            foreach ($check as $delta => $fieldname) {
-            //                #dpm($form[$element][$language][$delta][$fieldname]);
-            //                $parents = array_merge($element['#parents'], array('content', '#fields', $fieldname, $language));
-            //                dpm($form_state['field']['#parents']);
-            //                #$field_state = drupal_array_get_nested_value($form_state['field']['#parents'], $parents);
-            //                #dpm($field_state);
+            foreach ($parameters as $delta => $field_state) {
+                // do not replace the last created AJAX element.
+                if ($field_state['subform']['#field_name'] == $triggerelement && $delta == $triggerdelta) continue;
+                $language = $field_state['subform']['#language'];
+                $field_state['subform']['_weight'] = $form[$element][$language][$delta]['_weight'];
+                $form[$element][$language][$delta] = $field_state['subform'];
+            }
         }
     }
 }
