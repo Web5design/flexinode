@@ -151,8 +151,7 @@ function mfx_field_widget_form(&$form, &$form_state, $field, $instance, $langcod
                 'progress' => array('type' => 'throbber'),
             )
         );
-        $parents = array_merge($element['#field_parents'], array($field_name, $langcode, $delta, $elementName, 'content'));
-
+        $parents = array_merge($element['#field_parents'], array('content'));
         // on AJAX callback add the embedded form into the widget for the current $delta
         $ajaxtriggered = (isset($form_state['triggering_element'])) ? true : false;
         $flexinodetype = (isset($form_state['triggering_element']["#value"])) ? $form_state['triggering_element']["#value"] : NULL;
@@ -208,8 +207,8 @@ function mfx_flexifield_widget_validate($element, &$form_state, $form) {
         // TODO move this to a hook_extract_form_values later!
         if (is_object($flexinode)) {
             $subform = $form_state['#flexinodes'][$fieldname][$delta]['subform'][$element['#field_name']]['content'];
-            $subform_values = $form_state['values'][$fieldname][$language][$delta][$element['#field_name']];
-            if ($flid = $flexinode->submit($subform, $subform_values)) {
+            #$subform_values = $form_state['values'][$fieldname][$language][$delta][$element['#field_name']];
+            if ($flid = $flexinode->submit($subform, $form_state)) {
                 array_pop($element['#parents']);
                 form_set_value($element, array('flid' => $flid), $form_state);
             }
@@ -245,7 +244,8 @@ function mfx_flexifield_widget_validate($element, &$form_state, $form) {
 
 
 function mfx_flexifield_widget_submit(&$form, &$form_state) {
-
+ echo ('woot');
+dpr($form);
 }
 
 
@@ -257,7 +257,7 @@ function mfx_field_get_entity(&$item, $type = NULL) {
         // todo load ;)
     }
     elseif (!isset($item['entity']) && isset($type)) {
-        $item['entity'] = entity_create('flexinode', array('type' => $type));
+        $item['entity'] = entity_get_controller('flexinode')->create(array('type' => $type));
     }
     return isset($item['entity']) ? $item['entity'] : FALSE;
 }
@@ -291,3 +291,5 @@ function mfx_form_alter(&$form, &$form_state) {
         }
     }
 }
+
+

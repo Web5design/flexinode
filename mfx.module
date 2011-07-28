@@ -188,19 +188,17 @@ class Flexinode extends Entity {
     }
 
     /**
-     * Handles the creating/updating for a embedded flexinode
+     * Handles the creating/updating for a embedded flexinode, moves the fields from ['content'] into the correct position
+     * to be further processed and saved.
      * @param $form  The subform used to create this flexinode
-     * @param $form_values the values from $form_state['values'][flexi_container_{field_name}]['content'] for this flexinode
+     * @param $form_state 
      * @return $flid
      */
-    public function submit($form, $form_values) {
-        unset($form_values['select']);
-        foreach ($form_values['content'] as $name => $value) {
-            $form_values[$name] = $value;
-        }
-        unset($form_values['content']);
-        $form_values = array('values' => $form_values);
-        entity_form_submit_build_entity($this->entityType, $this, $form, $form_values);
+    public function submit($form, $form_state) {
+        $fields_needed = array_keys(field_info_instances($this->entityType, $this->type));
+        $form_state['input'] = array_diff_key($form_state['input']['content'],$fields_needed);
+        $form_state['values'] = array_diff_key($form_state['values']['content'],$fields_needed);
+        entity_form_submit_build_entity($this->entityType, $this, $form, $form_state);
         if ($this->is_new = isset($this->is_new) ? $this->is_new : 0) {
             $this->created = time();
         }
@@ -218,6 +216,20 @@ class Flexinode extends Entity {
 
     protected function defaultUri() {
         return array('path' => 'flexinode/' . $this->flid);
+    }
+
+    public function create(array $values = array()) {
+        // Add values that are specific to our Model
+        $values += array(
+            'flid' => '',
+            'is_new' => TRUE,
+            'title' => '',
+            'created' => '',
+            'changed' => '',
+        );
+
+        $flexinode = parent::create($values);
+        return $flexinode;
     }
 }
 
