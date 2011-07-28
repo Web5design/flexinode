@@ -136,14 +136,15 @@ function mfx_flexinode_type_access($op, $type = NULL, $account = NULL) {
     #return user_access('administer flexinode types', $account);
 }
 
-function mfx_flexinode_load($flid, $reset = FALSE) {
+//see entity_get_info() why ;) hint : 'load hook' => $name . '_load'
+function mfx_load_flexinode($flid, $reset = FALSE) {
     $models = mfx_flexinode_load_multiple(array($flid), array(), $reset);
     return reset($models);
 }
 
 
 function mfx_flexinode_load_multiple($flids = array(), $conditions = array(), $reset = FALSE) {
-    return entity_load('flexinode', $flids, $conditions, $reset);
+    $ent =  entity_load('flexinode', $flids, $conditions, $reset);
 }
 
 

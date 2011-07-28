@@ -108,6 +108,8 @@ function mfx_field_widget_info() {
  * containing both the selector and the embedded form for the flexinode based on the $delta of the selector.
  */
 function mfx_field_widget_form(&$form, &$form_state, $field, $instance, $langcode, $items, $delta, $element) {
+
+    dpm($items);
     $return = false;
     if ($instance['widget']['type'] == 'mfx_flexifield_widget') {
         if (!in_array('mfx_flexifield_widget_submit', $form['#submit'])) {
@@ -257,7 +259,7 @@ function mfx_flexifield_widget_submit(&$form, &$form_state) {
  */
 function mfx_field_get_entity(&$item, $type = NULL) {
     if (isset($item['flid'])) {
-        dpm('looaaad');
+        mfx_load_flexinode($item['flid']);
     }
     elseif (!isset($item['entity']) && isset($type)) {
         $item['entity'] = entity_get_controller('flexinode')->create(array('type' => $type));
