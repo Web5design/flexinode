@@ -109,7 +109,7 @@ function mfx_field_widget_info() {
  */
 function mfx_field_widget_form(&$form, &$form_state, $field, $instance, $langcode, $items, $delta, $element) {
 
-    dpm($items);
+
     $return = false;
     if ($instance['widget']['type'] == 'mfx_flexifield_widget') {
         if (!in_array('mfx_flexifield_widget_submit', $form['#submit'])) {
@@ -160,6 +160,10 @@ function mfx_field_widget_form(&$form, &$form_state, $field, $instance, $langcod
         $triggeringdelta = (isset($form_state['triggering_element']['#delta'])) ? $form_state['triggering_element']['#delta'] : NULL;
         if ($triggeringdelta == $delta) {
             $flexinode = mfx_field_get_entity($items[$delta], $flexinodetype);
+            if (isset($items[$delta]['flid'])) {
+                 // Edit screen..
+                  $element[$elementName]['select']['#default_value'] = $flexinode->type;
+            }
             if (is_object($flexinode)) {
                 $element[$elementName]['content'] = array(
                     '#field_name' => 'content',
@@ -221,36 +225,13 @@ function mfx_flexifield_widget_validate($element, &$form_state, $form) {
         }
     }
 
-    //
-    //
-    //    $flexinode = $field_state['entity'];
-    //    // Attach field API validation of the embedded form.
-    //    field_attach_form_validate('flexinode', $flexinode, $element, $form_state);
 
     // TODO subform validation!
-    //    if (!field_collection_item_is_empty($flexinode_entity) && !empty($element['#field_collection_required_elements'])) {
-    //        foreach ($element['#field_collection_required_elements'] as &$elements) {
-    //            // Copied from _form_validate().
-    //            if (isset($elements['#needs_validation'])) {
-    //                $is_empty_multiple = (!count($elements['#value']));
-    //                $is_empty_string = (is_string($elements['#value']) && drupal_strlen(trim($elements['#value'])) == 0);
-    //                $is_empty_value = ($elements['#value'] === 0);
-    //                if ($is_empty_multiple || $is_empty_string || $is_empty_value) {
-    //                    if (isset($elements['#title'])) {
-    //                        form_error($elements, t('!name field is required.', array('!name' => $elements['#title'])));
-    //                    }
-    //                    else {
-    //                        form_error($elements);
-    //                    }
-    //                }
-    //            }
-    //        }
-    //    }
 }
 
 
 function mfx_flexifield_widget_submit(&$form, &$form_state) {
-    #dpr($form);
+ // void at this moment..
 }
 
 
@@ -259,7 +240,7 @@ function mfx_flexifield_widget_submit(&$form, &$form_state) {
  */
 function mfx_field_get_entity(&$item, $type = NULL) {
     if (isset($item['flid'])) {
-        mfx_load_flexinode($item['flid']);
+        $item['entity'] = mfx_load_flexinode($item['flid']);
     }
     elseif (!isset($item['entity']) && isset($type)) {
         $item['entity'] = entity_get_controller('flexinode')->create(array('type' => $type));

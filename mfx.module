@@ -144,7 +144,8 @@ function mfx_load_flexinode($flid, $reset = FALSE) {
 
 
 function mfx_flexinode_load_multiple($flids = array(), $conditions = array(), $reset = FALSE) {
-    $ent =  entity_load('flexinode', $flids, $conditions, $reset);
+    return entity_load('flexinode', $flids, $conditions, $reset);
+
 }
 
 
