@@ -99,9 +99,17 @@ function mfx_entity_info_alter(&$entity_info) {
  * @param null $type_name
  * @return array|mixed
  */
-function mfx_flexinode_get_types($type_name = NULL) {
+function mfx_flexinode_get_types($type_name = NULL,$indexed = false) {
     $types = entity_load_multiple_by_name('flexinode_type', isset($type_name) ? array($type_name) : FALSE);
-    return isset($type_name) ? reset($types) : $types;
+    if ($indexed){
+        $return = array();
+        foreach($types as $type){
+            $return[$type->id] = $type->label;
+        }
+    } else {
+        $return = isset($type_name) ? reset($types) : $types;
+    }
+    return $return;
 }
 
 
