@@ -8,9 +8,9 @@
  * Giving you the power to define re-usable content types without writing complex forms
  *
  * Inspiration comes from node_reference, fieldgroup, flexifield and field_collection modules
- *
+ * 
  * @author : René Bakx (rene@71media.net)
- *
+ *   
  */
 
 include_once("mfx.field.inc");

@@ -1,6 +1,6 @@
 <?php
-
 /**
+ * $Id$
  * @file
  * Sets up the base table for our entity and a table to store information about
  * the entity types.

@@ -1,6 +1,7 @@
 <?php
 
 /**
+ * 
  * @file
  * flexinode editing UI.
  *
