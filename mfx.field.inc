@@ -30,10 +30,18 @@ function mfx_field_info() {
         'description' => t('This field internaly embeds the edit form from a flexinode'),
         'settings' => array('referenceable_types' => array()),
         'default_widget' => 'mfx_flexifield_widget',
-        'default_formatter' => 'mfx_flexifield_formatter',
+        'default_formatter' => 'flexinode_default',
         'property_type' => 'flexinode',
     );
     return $fields;
+}
+
+function mfx_field_formatter_info() {
+    return array(
+        'flexinode_default' => array(
+            'label' => t('Default'),
+            'field types' => array('flexinode'),
+        ));
 }
 
 /**
@@ -112,7 +120,7 @@ function mfx_field_widget_info() {
 }
 
 /**
- * The actuall widget form itself, creates a $delta indexed container with a dropdown to select the
+ * The actual widget form itself, creates a $delta indexed container with a dropdown to select the
  * flexinode to embed. This container is replaced trough a AJAX call with a new subform
  * containing both the selector and the embedded form for the flexinode based on the $delta of the selector.
  *
@@ -129,12 +137,10 @@ function mfx_field_widget_info() {
 function mfx_field_widget_form(&$form, &$form_state, $field, $instance, $langcode, $items, $delta, $element) {
     $return = NULL;
     if ($instance['widget']['type'] == 'mfx_flexifield_widget') {
-        if (!in_array('mfx_flexifield_widget_submit', $form['#submit'])) {
-            $form['#submit'][] = 'mfx_flexifield_widget_submit';
-        }
         $elementName = 'fc_' . $field['field_name'] . '_' . $delta;
         $form['#flexinodefields'][$field['field_name']] = $field['field_name'];
-
+        //TODO A bit tricky, could go terribly wrong if other elements are using #AJAX submit, so must refactor into something more distinctive.
+        $submit = (isset($form_state['triggering_element'])) ? $form_state['triggering_element']["#value"] : false;
         $flexinodetype = null;
         $flexinodeid = null;
         $state = FL_EMPTY; // TODO, figure out if this is really needed at all!
@@ -142,8 +148,11 @@ function mfx_field_widget_form(&$form, &$form_state, $field, $instance, $langcod
             $flexinodeid = $items[$delta]['flid'];
             $flexinodetype = $items[$delta]['type'];
             $state = FL_EDIT;
-        } elseif (isset($form_state['triggering_element']["#value"])) {
+        }
+
+        if ($submit && $submit != $flexinodetype) {
             $flexinodetype = $form_state['triggering_element']["#value"];
+            $flexinodeid = null;
             $state = FL_NEW;
         }
 
@@ -227,18 +236,14 @@ function mfx_process_element($element, &$form_state, $form) {
      *
      * TODO, clean some overhead in detection both here and in the widget code.
      */
-
+    $flexinodetype = drupal_array_get_nested_value($form_state['input'], $element['#parents']);
+    $flexinodetype = $element['select']['#options'][$flexinodetype['select']];
+    $flexinode = mfx_field_get_entity($element['#flid'], $flexinodetype);
     switch ($element['#state']) {
         case FL_NEW :
-            $flexinodetype = drupal_array_get_nested_value($form_state['input'], $element['#parents']);
-            $flexinodetype = $element['select']['#options'][$flexinodetype['select']];
-            $flexinode = mfx_field_get_entity($element['#flid'], $flexinodetype);
+        case FL_EDIT:
             field_attach_form('flexinode', $flexinode, $element['content'], $form_state, $element['#language']);
             break;
-        case FL_EDIT:
-            dpm('edit');
-            break;
-
         case FL_EMPTY:
             // do nothing ;)
             break;
@@ -260,6 +265,7 @@ function mfx_validate_element(&$element, &$form_state) {
         // Process the element, so the correct subform is attached. TODO figure out WHY this is needed :(
         switch ($element['#state']) {
             case FL_NEW :
+            case FL_EDIT:
                 $flexinodetype = drupal_array_get_nested_value($form_state['input'], $element['#parents']);
                 $type_id = $flexinodetype['select'];
                 $flexinodetype = $element['select']['#options'][$type_id];
@@ -271,10 +277,9 @@ function mfx_validate_element(&$element, &$form_state) {
                 if (!$flid = $flexinode->submit($element['content'], $form_state)) {
                     form_set_error('Flexinode', t('There was a problem storing a new flexinode'));
                 } else {
+                    array_pop($element['#parents']);
                     form_set_value($element, array('type' => $type_id, 'flid' => $flid), $form_state);
                 }
-                break;
-            case FL_EDIT:
                 break;
         }
         // TODO subform validation!
@@ -282,20 +287,13 @@ function mfx_validate_element(&$element, &$form_state) {
 }
 
 
-function mfx_flexifield_widget_submit(&$form, &$form_state) {
-    echo 'submit';
-    dpr($form_state['values']);
-    exit();
-}
-
-
 /**
  * create or returns the entity for the embedded form.
  */
-function mfx_field_get_entity($item, $type = NULL) {
+function mfx_field_get_entity($flid = null, $type = NULL) {
     $return = false;
-    if (isset($item['flid'])) {
-        $return = mfx_load_flexinode($item['flid']);
+    if (isset($flid)) {
+        $return = mfx_load_flexinode($flid);
     }
     elseif (!isset($item['entity']) && isset($type)) {
         $return = entity_get_controller('flexinode')->create(array('type' => $type));
@@ -304,3 +302,7 @@ function mfx_field_get_entity($item, $type = NULL) {
 }
 
 
+function mfx_field_formatter_view($flexinode_type, $flexinode, $field, $instance, $langcode, $items, $display) {
+    dpm($display);
+
+}
