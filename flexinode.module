@@ -1,0 +1,332 @@
+<?php
+// $Id: Exp $
+
+/**
+ * @file flexinode.module
+ *
+ * Embedded a flexinode entity edit form into any other fieldable enity.
+ * Giving you the power to define re-usable content types without writing complex forms
+ *
+ * Inspiration comes from node_reference, fieldgroup, flexifield and field_collection modules
+ *
+ * @author : René Bakx (rene@71media.net)
+ *
+ */
+
+include_once("flexinode.field.inc");
+
+/**
+ * Implements hook_entity_info().
+ * @return array
+ */
+function flexinode_entity_info() {
+    $return['flexinode'] = array(
+        'label' => t('Flexinode'),
+        'entity class' => 'Flexinode',
+        'controller class' => 'FlexinodeController',
+        'base table' => 'flexinode',
+        'fieldable' => TRUE,
+        'entity keys' => array(
+            'id' => 'flid',
+            'bundle' => 'type',
+        ),
+        // Bundles are defined by the flexinode types below and loaded in flexinode_entity_info_alter
+        'bundles' => array(),
+        'bundle keys' => array(
+            'bundle' => 'type',
+        ),
+        'label callback' => 'entity_class_label',
+        'uri callback' => 'entity_class_uri',
+        'creation callback' => 'flexinode_flexinode_create',
+        'module' => 'flexinode', // name of the module this entity belongs to
+        // The information below is used by the ModelUIController (which extends the EntityDefaultUIController)
+        'admin ui' => array(
+            'path' => 'admin/content/flexinode',
+            'file' => 'flexinode.controllers.inc',
+            'controller class' => 'FlexinodeUIController',
+            'menu wildcard' => '%flexinode',
+        ),
+    );
+    // The entity bundle that holds information about the entity types
+    $return['flexinode_type'] = array(
+        'label' => t('Flexinode Type'),
+        'entity class' => 'FlexinodeType',
+        'controller class' => 'FlexinodeTypeController',
+        'base table' => 'flexinode_type',
+        'fieldable' => FALSE,
+        'bundle of' => 'flexinode',
+        'exportable' => TRUE,
+        'entity keys' => array(
+            'id' => 'id',
+            'name' => 'type',
+            'label' => 'label',
+        ),
+        'access callback' => 'flexinode_flexinode_type_access',
+        'module' => 'flexinode',
+        // Enable the entity API's admin UI.
+        'admin ui' => array(
+            'path' => 'admin/structure/flexinodes',
+            'file' => 'flexinode.controllers.inc',
+            'controller class' => 'FlexinodeTypeUIController',
+        ),
+    );
+    return $return;
+}
+
+/**
+ * Implements hook_entity_info_alter().
+ *
+ * Add the user definied flexinodes into the structure
+ * doing it here seems to prevent some recursion issues
+ */
+function flexinode_entity_info_alter(&$entity_info) {
+    foreach (flexinode_flexinode_get_types() as $type => $info) {
+        $entity_info['flexinode']['bundles'][$type] = array(
+            'label' => $info->label,
+            'admin' => array(
+                'path' => 'admin/structure/flexinodes/manage/%flexinode_type',
+                'real path' => 'admin/structure/flexinodes/manage/' . $type,
+                'bundle argument' => 4,
+                'access arguments' => array('administer model types'),
+            ),
+        );
+    }
+}
+
+
+/**
+ * Returns either all the types or the $type_name flexinode_type
+ * @param null $type_name
+ * @return array|mixed
+ */
+function flexinode_flexinode_get_types($type_name = NULL, $indexed = false) {
+    $types = entity_load_multiple_by_name('flexinode_type', isset($type_name) ? array($type_name) : FALSE);
+    if ($indexed) {
+        $return = array();
+        foreach ($types as $type) {
+            $return[$type->id] = $type->label;
+        }
+    } else {
+        $return = isset($type_name) ? reset($types) : $types;
+    }
+    return $return;
+}
+
+
+/**
+ * Menu wildcard loader
+ *
+ * @param $type
+ * @return array|mixed
+ */
+function flexinode_type_load($type) {
+    return flexinode_flexinode_get_types($type);
+}
+
+/**
+ * Implements hook_permission().
+ */
+function flexinode_permission() {
+    $permissions = array(
+        'administer flexinode types' => array(
+            'title' => t('Administer model types'),
+            'description' => t('Create and delete fields for flexinode types'),
+        ),
+    );
+    return $permissions;
+}
+
+/**
+ * Implements the above definied permission check
+ */
+function flexinode_flexinode_type_access($op, $type = NULL, $account = NULL) {
+    return true;
+    #return user_access('administer flexinode types', $account);
+}
+
+//see entity_get_info() why ;) hint : 'load hook' => $name . '_load'
+function flexinode_load_flexinode($flid, $reset = FALSE) {
+    $models = flexinode_flexinode_load_multiple(array($flid), array(), $reset);
+    return reset($models);
+}
+
+
+function flexinode_flexinode_load_multiple($flids = array(), $conditions = array(), $reset = FALSE) {
+    return entity_load('flexinode', $flids, $conditions, $reset);
+
+}
+
+
+function flexinode_flexinode_delete_multiple(array $flids) {
+    entity_get_controller('flexinode')->delete($model_ids);
+}
+
+
+function flexinode_flexinode_create($values = array()) {
+    return entity_get_controller('flexinode')->create($values);
+}
+
+function flexinode_flexinode_delete(Flexinode $flexinode) {
+    $flexinode->delete();
+}
+
+function flexinode_flexinode_save(Flexinode $flexinode) {
+    return $flexinode->save();
+}
+
+
+/**
+ * Implements hook_form_alter().
+ *
+ * Remove flexinodes from the flexinode fieldset, to prevent creation
+ * of a flex in a flex in a flex etc.
+ */
+function flexinode_form_field_ui_field_overview_form_alter($form, &$formstate, $form_id) {
+    if ($form['#entity_type'] == 'flexinode') {
+        unset($form['fields']['_add_new_field']['type']['#options']['flexifield']);
+    }
+}
+
+/**
+ * The class used for model entities
+ */
+class Flexinode extends Entity {
+    public $is_new, $flid, $created, $changed;
+
+    public function __construct($values = array()) {
+        parent::__construct($values, 'flexinode');
+    }
+
+    /**
+     * Handles the creating/updating for a embedded flexinode, moves the fields from ['content'] into the correct position
+     * to be further processed and saved.
+     * The fields are already processed on the submission of the host form, so just copy and save.
+     *
+     * @param $form Array subform used to create this flexinode
+     * @param $form_state
+     * @return $flid PK of the newly created flexinode
+     */
+    public function submit($form, $form_state) {
+
+        if ($this->is_new = isset($this->is_new) ? $this->is_new : 0) {
+            $this->created = time();
+        }
+        field_attach_submit($this->entityType, $this, $form, $form_state);
+        $this->changed = time();
+        $this->save();
+        return $this->flid;
+    }
+
+    protected function defaultLabel() {
+        if (isset($this->type)) {
+            return t('Flexinode') . ' ' . $this->type;
+        }
+        return t('Flexinode');
+    }
+
+    protected function defaultUri() {
+        return array('path' => 'flexinode/' . $this->flid);
+    }
+
+    public function create(array $values = array()) {
+        // Add values that are specific to our Model
+        $values += array(
+            'flid' => '',
+            'is_new' => TRUE,
+            'title' => '',
+            'created' => '',
+            'changed' => '',
+        );
+
+        $flexinode = parent::create($values);
+        return $flexinode;
+    }
+
+}
+
+
+/**
+ * The class used for model type entities
+ */
+class FlexinodeType extends Entity {
+
+    public $type;
+    public $label;
+    public $status;
+
+    public function __construct($values = array()) {
+        if ($values) {
+            $values['module'] = 'flexinode'; // set module to flexinode not sure if this needed..
+            if (!isset($values['status'])) $values['status'] = ENTITY_IN_DB;
+        }
+        parent::__construct($values, 'flexinode_type');
+    }
+
+
+}
+
+class flexinodeController extends EntityAPIController {
+    public function __construct($entityType) {
+        parent::__construct($entityType);
+    }
+
+
+    /**
+     * Create a model - we first set up the values that are specific
+     * to our model schema but then also go through the EntityAPIController
+     * function.
+     *
+     * @param $type
+     *   The machine-readable type of the model.
+     *
+     * @return
+     *   A model object with all default fields initialized.
+     */
+    public function create(array $values = array()) {
+        // Add values that are specific to our Model
+        $values += array(
+            'flid' => '',
+            'is_new' => TRUE,
+            'created' => '',
+            'changed' => '',
+        );
+
+        $flexinode = parent::create($values);
+        return $flexinode;
+    }
+
+    /**
+     * Overriding the buldContent function to add entity specific fields
+     */
+    public function buildContent($entity, $view_mode = 'full', $langcode = NULL, $content = array()) {
+        return parent::buildContent($entity, $view_mode, $langcode, $content);
+    }
+
+      public function view($entities, $view_mode = 'full', $langcode = NULL, $page = NULL) {
+         $content = parent::view($entities, $view_mode, $langcode, $page);
+         return $content['flexinode'][$entities[0]->flid];
+      }
+}
+
+
+/**
+ * The Controller for Model entities
+ */
+class flexinodeTypeController extends EntityAPIControllerExportable {
+    public function __construct($entityType) {
+        parent::__construct($entityType);
+    }
+
+    public function create(array $values = array()) {
+        $values += array(
+            'id' => '',
+            'is_new' => TRUE,
+        );
+        $flexinode_type = parent::create($values);
+        return $flexinode_type;
+    }
+
+    public function load($ids = array(), $conditions = array()) {
+        return parent::load($ids, $conditions);
+    }
+}

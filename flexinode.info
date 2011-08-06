@@ -1,0 +1,15 @@
+; $Id$ 
+name = Flexinode
+description = Provides entity based flexifield
+package = Contrib
+version = 7.0.0-beta-1
+core = 7.x
+
+dependencies[] = entity
+
+files[] = mfx.module
+files[] = mfx.field.inc
+files[] = mfx.flexinode.admin.inc
+files[] = mfx.flexinode_type.admin.inc
+
+
