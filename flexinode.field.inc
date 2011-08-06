@@ -19,7 +19,7 @@ function flexinode_field_info() {
     'label' => t('Flexinode'),
     'description' => t('This field internaly embeds the edit form from a flexinode'),
     'settings' => array('referenceable_types' => array()),
-    'default_widget' => 'mfx_flexifield_widget',
+    'default_widget' => 'flexifield_widget',
     'default_formatter' => 'flexinode_default',
     'property_type' => 'flexinode',
   );
@@ -65,10 +65,10 @@ function flexinode_field_schema($field) {
 /**
  * Implement a settings form for the widget in the host entity
  */
-function mfx_field_settings_form($field, $instance, $has_data) {
+function flexinode_field_settings_form($field, $instance, $has_data) {
   if ($field['type'] == 'flexinode') {
     $options = array();
-    $available_types = flexinode_flexinode_get_types();
+    $available_types = flexinode_get_types();
     foreach ($available_types as $type) {
       $options += array($type->id => check_plain($type->label));
     }
@@ -103,14 +103,14 @@ function flexinode_field_is_empty($item, $field) {
  */
 function flexinode_field_widget_info() {
   return array(
-    'flexinode_flexifield_widget' => array(
+    'flexifield_widget' => array(
       'label' => t('Embedded'),
       'description' => t('Show the entry form for a widget'),
       'field types' => array('flexinode'),
-      'settings' => array(),
+      'settings' => array('referenceable_types' => array()),
       'behaviors' => array(
         'multiple values' => FIELD_BEHAVIOR_DEFAULT,
-        'default value' => FIELD_BEHAVIOR_NONE, // no default values for this
+        'default value' => FIELD_BEHAVIOR_DEFAULT, // no default values for this
       ),
     )
   );
@@ -165,7 +165,7 @@ function flexinode_field_widget_form(&$form, &$form_state, $field, $instance, $l
  * The AJAX callback, replace's the form['content'] with the one generated
  * in flexinode_process_element.
  */
-function flexinode_flexifield_widget_trigger_subform_ajax($form, &$form_state) {
+function flexinode_widget_ajax_callback($form, &$form_state) {
   $element = $form_state['triggering_element'];
   array_pop($element['#array_parents']);
   $subform = drupal_array_get_nested_value($form, $element['#array_parents']);
@@ -194,7 +194,7 @@ function flexinode_process_element($element, &$form_state, $form) {
     '#parents' => array_merge($element['#parents'], array('content')),
   );
   $element['select']['#ajax'] = array(
-    'callback' => 'flexinode_flexifield_widget_trigger_subform_ajax',
+    'callback' => 'flexinode_widget_ajax_callback',
     'wrapper' => $target_element,
     'method' => 'replace',
     'effect' => 'slide',

@@ -76,7 +76,7 @@ function flexinode_entity_info() {
  * doing it here seems to prevent some recursion issues
  */
 function flexinode_entity_info_alter(&$entity_info) {
-  foreach (flexinode_flexinode_get_types() as $type => $info) {
+  foreach (flexinode_get_types() as $type => $info) {
     $entity_info['flexinode']['bundles'][$type] = array(
       'label' => $info->label,
       'admin' => array(
@@ -95,7 +95,7 @@ function flexinode_entity_info_alter(&$entity_info) {
  * @param NULL $type_name
  * @return array|mixed
  */
-function flexinode_flexinode_get_types($type_name = NULL, $indexed = FALSE) {
+function flexinode_get_types($type_name = NULL, $indexed = FALSE) {
   $types = entity_load_multiple_by_name('flexinode_type', isset($type_name)
                                                                 ? array($type_name)
                                                                 : FALSE);
@@ -119,7 +119,7 @@ function flexinode_flexinode_get_types($type_name = NULL, $indexed = FALSE) {
  * @return array|mixed
  */
 function flexinode_type_load($type) {
-  return flexinode_flexinode_get_types($type);
+  return flexinode_get_types($type);
 }
 
 /**
@@ -145,7 +145,7 @@ function flexinode_type_access($op, $type = NULL, $account = NULL) {
 
 //see entity_get_info() why ;) hint : 'load hook' => $name . '_load'
 function flexinode_load_flexinode($flid, $reset = FALSE) {
-  $models = flexinode_flexinode_load_multiple(array($flid), array(), $reset);
+  $models = flexinode_load_multiple(array($flid), array(), $reset);
   return reset($models);
 }
 
