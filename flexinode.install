@@ -1,9 +1,9 @@
 <?php
 /**
- * $Id$
  * @file
- * Sets up the base table for our entity and a table to store information about
- * the entity types.
+ * Sets up the base tables for flexinodes, and flexinodetypes.
+ *
+ * @author Rene Bakx (rene@71media.net)
  */
 
 
@@ -51,32 +51,32 @@ function flexinode_schema() {
   $schema['flexinode_type'] = array(
     'description' => 'Stores information about defined flexinode types.',
     'fields' => array(
-      'id' => array(
-        'type' => 'serial',
-        'not null' => TRUE,
-        'description' => 'Primary Key: Unique flexinode type identifier.',
-      ),
-      'type' => array(
-        'description' => 'The machine-readable name of this flexinode type.',
-        'type' => 'varchar',
-        'length' => 255,
-        'not null' => TRUE,
-      ),
-      'label' => array(
-        'description' => 'The human-readable name of this flexinode type.',
-        'type' => 'varchar',
-        'length' => 255,
-        'not null' => TRUE,
-        'default' => '',
-      ),
-      'weight' => array(
-        'type' => 'int',
-        'not null' => TRUE,
-        'default' => 0,
-        'size' => 'tiny',
-        'description' => 'The weight of this model type in relation to others.',
-      ),
-    ) + entity_exportable_schema_fields(),
+                  'id' => array(
+                    'type' => 'serial',
+                    'not null' => TRUE,
+                    'description' => 'Primary Key: Unique flexinode type identifier.',
+                  ),
+                  'type' => array(
+                    'description' => 'The machine-readable name of this flexinode type.',
+                    'type' => 'varchar',
+                    'length' => 255,
+                    'not null' => TRUE,
+                  ),
+                  'label' => array(
+                    'description' => 'The human-readable name of this flexinode type.',
+                    'type' => 'varchar',
+                    'length' => 255,
+                    'not null' => TRUE,
+                    'default' => '',
+                  ),
+                  'weight' => array(
+                    'type' => 'int',
+                    'not null' => TRUE,
+                    'default' => 0,
+                    'size' => 'tiny',
+                    'description' => 'The weight of this model type in relation to others.',
+                  ),
+                ) + entity_exportable_schema_fields(),
     'primary key' => array('id'),
     'unique keys' => array(
       'type' => array('type'),

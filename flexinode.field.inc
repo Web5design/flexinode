@@ -1,13 +1,9 @@
 <?php
-// $Id: Exp $
-
 /**
- * @file flexinode.field.inc
- *
- * Provides the embeded field to be used in fieldable entities.
+ * @file
+ * Provides the widget to embed a flexinode into a host entity.
  *
  * @author : René Bakx (rene@71media.net)
- *
  */
 
 
@@ -51,12 +47,12 @@ function flexinode_field_schema($field) {
       'flid' => array(
         'type' => 'int',
         'unsigned' => TRUE,
-        'not null' => TRUE,
+        'not NULL' => TRUE,
       ),
       'type' => array(
         'type' => 'int',
         'unsigned' => TRUE,
-        'not null' => FALSE,
+        'not NULL' => FALSE,
       )
     );
     return array(
@@ -92,11 +88,13 @@ function mfx_field_settings_form($field, $instance, $has_data) {
   }
 }
 
-/* Implements hook_is_empty().
-* TODO actually implement this ;)
-*/
+/**
+ * Implements hook_is_empty().
+ *
+ * TODO actually implement this ;)
+ */
 function flexinode_field_is_empty($item, $field) {
-  return false;
+  return FALSE;
 }
 
 /**
@@ -128,35 +126,35 @@ function flexinode_field_widget_info() {
 function flexinode_field_widget_form(&$form, &$form_state, $field, $instance, $langcode, $items, $delta, $element) {
   $return = NULL;
   if ($instance['widget']['type'] == 'flexinode_flexifield_widget') {
-    $elementName = 'fc_' . $field['field_name'] . '_' . $delta;
-    $available_flexinode_types = array(null => t('none'));
+    $element_name = 'fc_' . $field['field_name'] . '_' . $delta;
+    $available_flexinode_types = array(NULL => t('none'));
     $available_flexinode_types += array_combine(array_values($field['settings']['referenceable_types']),
-                                                array_values(flexinode_flexinode_get_types(null, true)));
-    $element[$elementName] = array(
-      '#field_name' => $elementName,
+                                                array_values(flexinode_flexinode_get_types(NULL, TRUE)));
+    $element[$element_name] = array(
+      '#field_name' => $element_name,
       '#type' => 'container',
-      '#flexi' => isset($items[$delta]) ? $items[$delta] : null,
+      '#flexi' => isset($items[$delta]) ? $items[$delta] : NULL,
       '#title' => t('flexifield item'),
       '#weight' => $delta,
       '#delta' => $delta,
-      '#tree' => true,
+      '#tree' => TRUE,
       '#language' => $langcode,
       '#process' => array('flexinode_process_element'), // this is where the subform is attached
       '#element_validate' => array('flexinode_validate_element'), // this where the subform get's saved.
     );
-    $element[$elementName]['select'] = array(
+    $element[$element_name]['select'] = array(
       '#delta' => $delta,
       '#type' => 'select',
       '#language' => $langcode,
-      '#required' => false,
+      '#required' => FALSE,
 
       '#options' => $available_flexinode_types,
     );
     if (!isset($form_state['triggering_element'])) {
       $type = (isset($items[$delta]['type'])) ? $items[$delta]['type']
-              : null;
-      $element[$elementName]['select']['#default_value'] = $type;
-      drupal_array_set_nested_value($form_state['input'], array($element['#field_name'], $langcode, $delta, $elementName), array('select' => $type));
+              : NULL;
+      $element[$element_name]['select']['#default_value'] = $type;
+      drupal_array_set_nested_value($form_state['input'], array($element['#field_name'], $langcode, $delta, $element_name), array('select' => $type));
     }
     $return = $element;
   }
@@ -184,20 +182,20 @@ function flexinode_flexifield_widget_trigger_subform_ajax($form, &$form_state) {
  * @return array
  */
 function flexinode_process_element($element, &$form_state, $form) {
-  $targetElement = 'ajax_' . $element['#field_name'];
+  $target_element = 'ajax_' . $element['#field_name'];
   $element['content'] = array(
-    '#prefix' => '<div id="' . $targetElement . '">',
+    '#prefix' => '<div id="' . $target_element . '">',
     '#suffix' => '</div>',
     '#field_name' => 'content',
     '#delta' => $element['#delta'],
     '#type' => 'container',
-    '#tree' => true,
+    '#tree' => TRUE,
     '#language' => $element['#language'],
     '#parents' => array_merge($element['#parents'], array('content')),
   );
   $element['select']['#ajax'] = array(
     'callback' => 'flexinode_flexifield_widget_trigger_subform_ajax',
-    'wrapper' => $targetElement,
+    'wrapper' => $target_element,
     'method' => 'replace',
     'effect' => 'slide',
     'progress' => array('type' => 'throbber'),
@@ -206,18 +204,18 @@ function flexinode_process_element($element, &$form_state, $form) {
   $flexitype_form_state = drupal_array_get_nested_value($form_state['input'], $element['#parents']);
   $type = $element['select']['#options'][$flexitype_form_state['select']];
   $flid = (isset($element['#flexi']['flid'])) ? $element['#flexi']['flid']
-          : null;
+          : NULL;
   $flexinode = flexinode_field_get_entity($flid, $type);
   // if the type has changed, init a new flexinode to attach.
   if ($flexinode->type != $type) {
-    $flexinode = flexinode_field_get_entity(null, $type);
+    $flexinode = flexinode_field_get_entity(NULL, $type);
   }
   field_attach_form('flexinode', $flexinode, $element['content'], $form_state, $element['#language']);
   return $element;
 }
 
 /**
- * implements hook_widget_validate().
+ * Implements hook_widget_validate().
  *
  * If the form is submitted, filter out the flexinodes, save them and set
  * the value according to flexinode_field_schema();
@@ -232,10 +230,10 @@ function flexinode_validate_element(&$element, &$form_state) {
     $type_id = $flexinodetype['select'];
     $flexinodetype = $element['select']['#options'][$type_id];
     $flid = (isset($element['#flexi']['flid'])) ? $element['#flexi']['flid']
-            : null;
+            : NULL;
     $flexinode = flexinode_field_get_entity($flid, $flexinodetype);
     if ($flexinode->type != $flexinodetype) {
-      $flexinode = flexinode_field_get_entity(null, $flexinodetype);
+      $flexinode = flexinode_field_get_entity(NULL, $flexinodetype);
     }
 
     if (!$flid = $flexinode->submit($element['content'], $form_state)) {
@@ -253,8 +251,8 @@ function flexinode_validate_element(&$element, &$form_state) {
 /**
  * create or returns the entity for the embedded form.
  */
-function flexinode_field_get_entity($flid = null, $type = NULL) {
-  $return = false;
+function flexinode_field_get_entity($flid = NULL, $type = NULL) {
+  $return = FALSE;
   if (isset($flid)) {
     $return = flexinode_load_flexinode($flid);
   }

@@ -1,11 +1,9 @@
 <?php
-
 /**
- * 
- * @file flexinode.controllers.inc
- *
+ * @file
  * Contains both entity derived classes needed for the CRUD/Editing of a flexinode.
  *
+ * @author : René Bakx (rene@71media.net)
  */
 
 /**
