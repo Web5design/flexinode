@@ -10,5 +10,6 @@ dependencies[] = entity
 files[] = flexinode.module
 files[] = flexinode.field.inc
 files[] = flexinode.controllers.inc
+files[] = flexinode.ui.controllers.inc
 files[] = flexinode.install
 

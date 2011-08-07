@@ -20,6 +20,7 @@ function flexinode_entity_info() {
     'label' => t('Flexinode'),
     'entity class' => 'Flexinode',
     'controller class' => 'FlexinodeController',
+    'file' => 'flexinode.controllers.inc',
     'base table' => 'flexinode',
     'fieldable' => TRUE,
     'entity keys' => array(
@@ -38,7 +39,7 @@ function flexinode_entity_info() {
     // The information below is used by the ModelUIController (which extends the EntityDefaultUIController)
     'admin ui' => array(
       'path' => 'admin/content/flexinode',
-      'file' => 'flexinode.controllers.inc',
+      'file' => 'flexinode.ui.controllers.inc',
       'controller class' => 'FlexinodeUIController',
       'menu wildcard' => '%flexinode',
     ),
@@ -48,6 +49,7 @@ function flexinode_entity_info() {
     'label' => t('Flexinode Type'),
     'entity class' => 'FlexinodeType',
     'controller class' => 'FlexinodeTypeController',
+    'file' => 'flexinode.controllers.inc',
     'base table' => 'flexinode_type',
     'fieldable' => FALSE,
     'bundle of' => 'flexinode',
@@ -62,7 +64,7 @@ function flexinode_entity_info() {
     // Enable the entity API's admin UI.
     'admin ui' => array(
       'path' => 'admin/structure/flexinodes',
-      'file' => 'flexinode.controllers.inc',
+      'file' => 'flexinode.ui.controllers.inc',
       'controller class' => 'FlexinodeTypeUIController',
     ),
   );
@@ -96,13 +98,11 @@ function flexinode_entity_info_alter(&$entity_info) {
  * @return array|mixed
  */
 function flexinode_get_types($type_name = NULL, $indexed = FALSE) {
-  $types = entity_load_multiple_by_name('flexinode_type', isset($type_name)
-                                                                ? array($type_name)
-                                                                : FALSE);
+  $types = entity_load_multiple_by_name('flexinode_type', isset($type_name) ? array($type_name) : FALSE);
   if ($indexed) {
     $return = array();
     foreach ($types as $type) {
-      $return[$type->id] = $type->label;
+      $return[$type->id] = $type;
     }
   }
   else {
@@ -157,7 +157,7 @@ function flexinode_load_multiple($flids = array(), $conditions = array(), $reset
 
 
 function flexinode_delete_multiple(array $flids) {
-  entity_get_controller('flexinode')->delete($model_ids);
+  entity_get_controller('flexinode')->delete($flids);
 }
 
 
@@ -174,17 +174,6 @@ function flexinode_save(Flexinode $flexinode) {
 }
 
 
-/**
- * Implements hook_form_alter().
- *
- * Remove flexinodes from the flexinode fieldset, to prevent creation
- * of a flex in a flex in a flex etc.
- */
-function flexinode_form_field_ui_field_overview_form_alter($form, &$formstate, $form_id) {
-  if ($form['#entity_type'] == 'flexinode') {
-    unset($form['fields']['_add_new_field']['type']['#options']['flexifield']);
-  }
-}
 
 /**
  * The class used for model entities
@@ -213,7 +202,6 @@ class Flexinode extends Entity {
     field_attach_submit($this->entityType, $this, $form, $form_state);
     $this->changed = time();
     $this->save();
-    return $this->flid;
   }
 
   protected function defaultLabel() {
@@ -264,68 +252,4 @@ class FlexinodeType extends Entity {
 
 }
 
-class flexinodeController extends EntityAPIController {
-  public function __construct($entityType) {
-    parent::__construct($entityType);
-  }
 
-
-  /**
-   * Create a model - we first set up the values that are specific
-   * to our model schema but then also go through the EntityAPIController
-   * function.
-   *
-   * @param $type
-   *   The machine-readable type of the model.
-   *
-   * @return
-   *   A model object with all default fields initialized.
-   */
-  public function create(array $values = array()) {
-    // Add values that are specific to our Model
-    $values += array(
-      'flid' => '',
-      'is_new' => TRUE,
-      'created' => '',
-      'changed' => '',
-    );
-
-    $flexinode = parent::create($values);
-    return $flexinode;
-  }
-
-  /**
-   * Overriding the buldContent function to add entity specific fields
-   */
-  public function buildContent($entity, $view_mode = 'full', $langcode = NULL, $content = array()) {
-    return parent::buildContent($entity, $view_mode, $langcode, $content);
-  }
-
-  public function view($entities, $view_mode = 'full', $langcode = NULL, $page = NULL) {
-    $content = parent::view($entities, $view_mode, $langcode, $page);
-    return $content['flexinode'][$entities[0]->flid];
-  }
-}
-
-
-/**
- * The Controller for Model entities
- */
-class flexinodeTypeController extends EntityAPIControllerExportable {
-  public function __construct($entityType) {
-    parent::__construct($entityType);
-  }
-
-  public function create(array $values = array()) {
-    $values += array(
-      'id' => '',
-      'is_new' => TRUE,
-    );
-    $flexinode_type = parent::create($values);
-    return $flexinode_type;
-  }
-
-  public function load($ids = array(), $conditions = array()) {
-    return parent::load($ids, $conditions);
-  }
-}
