@@ -33,7 +33,7 @@ class flexinodeController extends EntityAPIController {
 
   public function save($entity, DatabaseTransaction $transaction = NULL) {
     dpm($entity);
-    #return parent::save($entity, $transaction);
+    return parent::save($entity, $transaction);
   }
 
 
