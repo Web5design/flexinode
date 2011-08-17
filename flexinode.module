@@ -34,7 +34,7 @@ function flexinode_entity_info() {
     ),
     'label callback' => 'entity_class_label',
     'uri callback' => 'entity_class_uri',
-    'creation callback' => 'flexinode_flexinode_create',
+    'creation callback' => 'flexinode_create',
     'module' => 'flexinode', // name of the module this entity belongs to
     // The information below is used by the ModelUIController (which extends the EntityDefaultUIController)
     'admin ui' => array(
@@ -71,25 +71,25 @@ function flexinode_entity_info() {
   return $return;
 }
 
-/**
- * Implements hook_entity_info_alter().
- *
- * Add the user definied flexinodes into the structure
- * doing it here seems to prevent some recursion issues
- */
-function flexinode_entity_info_alter(&$entity_info) {
-  foreach (flexinode_get_types() as $type => $info) {
-    $entity_info['flexinode']['bundles'][$type] = array(
-      'label' => $info->label,
-      'admin' => array(
-        'path' => 'admin/structure/flexinodes/manage/%flexinode_type',
-        'real path' => 'admin/structure/flexinodes/manage/' . $type,
-        'bundle argument' => 4,
-        'access arguments' => array('administer model types'),
-      ),
-    );
-  }
-}
+///**
+// * Implements hook_entity_info_alter().
+// *
+// * Add the user definied flexinodes into the structure
+// * doing it here seems to prevent some recursion issues
+// */
+//function flexinode_entity_info_alter(&$entity_info) {
+//  foreach (flexinode_get_types() as $type => $info) {
+//    $entity_info['flexinode']['bundles'][$type] = array(
+//      'label' => $info->label,
+//      'admin' => array(
+//        'path' => 'admin/structure/flexinodes/manage/%flexinode_type',
+//        'real path' => 'admin/structure/flexinodes/manage/' . $type,
+//        'bundle argument' => 4,
+//        'access arguments' => array('administer model types'),
+//      ),
+//    );
+//  }
+//}
 
 
 /**

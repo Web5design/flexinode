@@ -94,7 +94,7 @@ function flexinode_type_form($form, &$form_state, $flexinode_type, $op = 'edit')
         '#default_value' => isset($flexinode_type->type) ? $flexinode_type->type : '',
         '#maxlength' => 32,
         '#machine_name' => array(
-            'exists' => 'flexinode_flexinode_get_types',
+            'exists' => 'flexinode_get_types',
             'source' => array('label'),
         ),
         '#description' => t('A unique machine-readable name for this model type. It must only contain lowercase letters, numbers, and underscores.'),

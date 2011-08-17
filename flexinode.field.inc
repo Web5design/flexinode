@@ -65,6 +65,7 @@ function flexinode_field_schema($field) {
 /**
  * Implement a settings form for the widget in the host entity
  */
+
 function flexinode_field_settings_form($field, $instance, $has_data) {
   if ($field['type'] == 'flexinode') {
     $options = array();
@@ -72,7 +73,7 @@ function flexinode_field_settings_form($field, $instance, $has_data) {
     foreach ($available_types as $type) {
       $options += array($type->id => check_plain($type->label));
     }
-    $settings = $field['settings'];
+    $settings = $instance['settings'];
     $form = array();
     $form['referenceable_types'] = array(
       '#type' => 'checkboxes',
@@ -85,6 +86,13 @@ function flexinode_field_settings_form($field, $instance, $has_data) {
     );
     return $form;
   }
+}
+
+function flexinode_field_instance_settings_form($field, $instance) {
+  $form = array();
+  $form['text'] = array(
+    '#type' => 'text',
+  );
 }
 
 /**
@@ -141,7 +149,6 @@ function flexinode_field_widget_form(&$form, &$form_state, $field, $instance, $l
       '#type' => 'container',
       '#flexi' => isset($items[$delta]) ? $items[$delta] : NULL,
       '#title' => t('flexifield item'),
-      '#weight' => $delta,
       '#delta' => $delta,
       '#tree' => TRUE,
       '#weight' => $delta,
@@ -240,22 +247,32 @@ function flexinode_process_element($element, &$form_state, $form) {
  * If the form is submitted, filter out the flexinodes, save them and set
  * the value according to flexinode_field_schema();
  *
- * TODO Does not validate at this moment.
+ * TODO Does not validate at this moment, and clean up.. feels to dirty..
  *
  */
 function flexinode_validate_element(&$element, &$form_state) {
   if ($form_state['submitted']) {
     // Most likely this was the add more button instead of submit.
     if ($form_state['triggering_element']['#parents'][0] != $element['#parents'][0]) {
-
-      // Process the element, so the correct subform is attached. TODO figure out WHY this is needed :(
-      $form_values = drupal_array_get_nested_value($form_state['input'], $element['#parents']);
+      $parents = $element['#parents'];
+      array_pop($parents);
+      array_pop($parents);
+      $parents[] = $element['#delta'];
+      // fetch the submited values including the weight..
+      $form_values = drupal_array_get_nested_value($form_state['input'], $parents);
+      $element_weight = $form_values['_weight'];
+      $parents[] = $element['#field_name'];
+      // transpose just values needed.
+      $form_values = $form_values[$element['#field_name']];
       $flexinode_type = false;
       $flexinode = false;
+
       if (!empty($form_values['select'])) {
         $flexinode_type = entity_object_load($form_values['select'], 'flexinode_type');
       }
+      $update = false;
       if (isset($element['#flexi']['flid'])) {
+        $update = true;
         $flexinode = flexinode_field_get_entity($element['#flexi']['flid'], $flexinode_type->type);
       }
       /*
@@ -265,23 +282,22 @@ function flexinode_validate_element(&$element, &$form_state) {
       if (is_object($flexinode)) {
         if ((!$flexinode_type) || ($flexinode->type != $flexinode_type->type)) {
           $flexinode->delete();
+          $update = false;
         }
       }
-      if ($flexinode_type) {
+
+      if ($flexinode_type && !$update) {
         $flexinode = flexinode_field_get_entity(NULL, $flexinode_type->type);
       }
       if (is_object($flexinode)) {
         $flexinode->submit($element['content'], $form_state);
-        array_pop($element['#parents']);
         if ($flexinode_type && $flexinode->flid) {
-          $values = array('type' => $flexinode_type->id, 'flid' => $flexinode->flid);
+          $values = array('_weight' => $element_weight, 'type' => $flexinode_type->id, 'flid' => $flexinode->flid);
+          array_pop($element['#parents']);
           form_set_value($element, $values, $form_state);
         }
         else {
-          #dpm($element);
-          #dpr($element);
-          #exit();
-          #form_set_value($element, array('type' => $flexinode_type, 'flid' => $flid), $form_state);
+          // this should not happen, perhaps throw error ;)
         }
       }
     }
