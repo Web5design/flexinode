@@ -361,10 +361,9 @@ function flexinode_field_formatter_settings_summary($field, $instance, $view_mod
     foreach ($referencables as $referencable) {
       $lookup[$referencable->type] = $referencable->label;
     }
-    dpm($lookup);
     if (isset($settings['updated'])) {
-      field_update_instance($instance);
       unset($settings['updated']);
+      field_update_instance($instance);
     }
     $summary = '';
     // TODO, move to decent theme function ;)
@@ -380,9 +379,23 @@ function flexinode_field_formatter_settings_summary($field, $instance, $view_mod
  */
 function flexinode_field_formatter_view($flexinode_type, $flexinode, $field, $instance, $langcode, $items, $display) {
   $element = array();
+  $display_modes = array();
+  if (isset($display['settings']['displaymode'])) {
+    $display_modes = $display['settings']['displaymode']['default']; // TODO check with custom display modes later!
+  }
   foreach ($items as $delta => $item) {
     if ($flexinode = flexinode_field_get_entity($item['flid'])) {
-      $element[$delta] = $flexinode->view();
+      switch ($display['type']) {
+        case 'flexinode_default':
+        default:
+          $element[$delta] = $flexinode->view();
+          break;
+        case 'flexinode_inherit':
+          $node = $flexinode->view();
+          $node['#view_mode'] = $display_modes[$node['#bundle']];
+          $element[$delta] = $node;
+          break;
+      }
     }
   }
   return $element;
