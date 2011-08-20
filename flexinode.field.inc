@@ -27,17 +27,6 @@ function flexinode_field_info() {
 }
 
 /**
- * Implements hook_field_formatter_info().
- */
-function flexinode_field_formatter_info() {
-  return array(
-    'flexinode_default' => array(
-      'label' => t('Default'),
-      'field types' => array('flexinode'),
-    ));
-}
-
-/**
  * Implements hook_schema().
  * Defines storage for flexifield in host entity
  */
@@ -63,46 +52,20 @@ function flexinode_field_schema($field) {
 }
 
 /**
- * Implement a settings form for the widget in the host entity
+ * Implements hook_field_formatter_info().
  */
-
-function flexinode_field_settings_form($field, $instance, $has_data) {
-  if ($field['type'] == 'flexinode') {
-    $options = array();
-    $available_types = flexinode_get_types();
-    foreach ($available_types as $type) {
-      $options += array($type->id => check_plain($type->label));
-    }
-    $settings = $instance['settings'];
-    $form = array();
-    $form['referenceable_types'] = array(
-      '#type' => 'checkboxes',
-      '#title' => t('Content types that can be referenced'),
-      '#multiple' => TRUE,
-      '#default_value' => is_array($settings['referenceable_types'])
-              ? $settings['referenceable_types'] : array(),
-      '#options' => $options,
-      '#disabled' => $has_data,
-    );
-    return $form;
-  }
-}
-
-function flexinode_field_instance_settings_form($field, $instance) {
-  $form = array();
-  $form['text'] = array(
-    '#type' => 'text',
+function flexinode_field_formatter_info() {
+  return array(
+    'flexinode_default' => array(
+      'label' => t('Default'),
+      'field types' => array('flexinode'),
+    ),
+    'flexinode_inherit' => array(
+      'label' => t('Inherit'),
+      'field types' => array('flexinode'),
+      'settings' => array('displaymode' => array('default' => array())),
+    ),
   );
-}
-
-/**
- * Implements hook_is_empty().
- */
-function flexinode_field_is_empty($item, $field) {
-  if (!isset($item['type'])) {
-    return true;
-  }
-  return false;
 }
 
 /**
@@ -123,6 +86,43 @@ function flexinode_field_widget_info() {
     )
   );
 }
+
+
+/**
+ * Implements the hook_fields_settings_form().
+ */
+
+function flexinode_field_settings_form($field, $instance, $has_data) {
+  return array(
+    '#type' => 'markup',
+    '#prefix' => t('Flexinode referrences are per instance and can be set on the edit tab'),
+  );
+}
+
+/**
+ * Implements the hook_fields_instance_settings_form().
+ */
+function flexinode_field_instance_settings_form($field, $instance) {
+  if ($field['type'] == 'flexinode') {
+    $options = array();
+    $available_types = flexinode_get_types();
+    foreach ($available_types as $type) {
+      $options += array($type->id => check_plain($type->label));
+    }
+    $settings = $instance['settings'];
+    $form = array();
+    $form['referenceable_types'] = array(
+      '#type' => 'checkboxes',
+      '#title' => t('Content types that can be referenced'),
+      '#multiple' => TRUE,
+      '#default_value' => (isset($settings['referenceable_types']))
+              ? $settings['referenceable_types'] : array(),
+      '#options' => $options,
+    );
+    return $form;
+  }
+}
+
 
 /**
  * The actual widget form itself, creates nothing but a container with #process and #element_validate
@@ -145,13 +145,18 @@ function flexinode_field_widget_form(&$form, &$form_state, $field, $instance, $l
       '#element_validate' => array('flexinode_validate_element'), // this where the subform get's saved.
     );
 
+
     $element[$element_name]['type'] = array(
       '#type' => 'select',
       '#language' => $langcode,
       '#required' => FALSE,
-      '#options' => flexinode_get_flexinodetypes($field),
+      '#options' => flexinode_get_flexinodetypes($instance),
       '#loaded_value' => isset($items[$delta]['type']) ? $items[$delta]['type'] : NULL,
     );
+
+    if ($field['cardinality'] == 1) {
+      $element[$element_name]['type']['#title'] = $instance['label'];
+    }
 
     $element[$element_name]['flid'] = array(
       '#type' => 'hidden',
@@ -242,7 +247,8 @@ function flexinode_validate_element(&$element, &$form_state) {
     array_pop($element['#parents']);
     $form_values = drupal_array_get_nested_value($form_state['input'], $element['#parents']);
     $form_values = $form_values[$element['#field_name']];
-    $weight = (isset($form_values['_weight'])) ? $form_values['_weight'] : $element['#weight'];
+    $weight = (isset($form_values['_weight'])) ? $form_values['_weight']
+            : $element['#weight'];
     /**
      * Check if there is a current flexinode, and if the flexinode is of the same type as the user selected
      * or if the user selected none, in both cases delete current flexinode
@@ -287,7 +293,18 @@ function flexinode_validate_element(&$element, &$form_state) {
 
 
 /**
- * create or returns the entity for the embedded form.
+ * Implements hook_is_empty().
+ */
+function flexinode_field_is_empty($item, $field) {
+  if (!isset($item['type'])) {
+    return true;
+  }
+  return false;
+}
+
+
+/**
+ * create or returns the entity to be embedded in the host entity
  */
 function flexinode_field_get_entity($flid = NULL, $type = NULL) {
   $return = FALSE;
@@ -301,6 +318,66 @@ function flexinode_field_get_entity($flid = NULL, $type = NULL) {
 }
 
 
+function flexinode_field_formatter_settings_form($field, $instance, $view_mode, $form, &$form_state) {
+  $display = $instance['display'][$view_mode];
+  $referencables = entity_load('flexinode_type', $instance['settings']['referenceable_types']);
+  if ($display['type'] == 'flexinode_inherit') {
+    $options = array();
+    foreach ($referencables as $referencable) {
+      $modes = field_view_mode_settings('flexinode', $referencable->type);
+      $viewmodes = array();
+      foreach ($modes as $name => $settings) {
+        if ($settings['custom_settings']) {
+          $viewmodes[$name] = $name;
+        }
+      }
+      $form['updated'] = array(
+        '#type' => 'hidden',
+        '#value' => true,
+      );
+      $form['displaymode'][$view_mode][$referencable->type] = array(
+        '#type' => 'select',
+        '#options' => $viewmodes,
+        '#title' => $referencable->label,
+      );
+    }
+  }
+  return $form;
+}
+
+
+/**
+ * Implements hook_field_formatter_settings_summary().
+ *
+ * And since i could not find another way without creating a shitload of code
+ * the above created formatter sneaky inserts a UPDATED into $instance
+ * so I could save the settings with field_instance_update();
+ */
+function flexinode_field_formatter_settings_summary($field, $instance, $view_mode) {
+  $display = $instance['display'][$view_mode];
+  $settings = $display['settings'];
+  if ($display['type'] == 'flexinode_inherit') {
+    $referencables = entity_load('flexinode_type', $instance['settings']['referenceable_types']);
+    foreach ($referencables as $referencable) {
+      $lookup[$referencable->type] = $referencable->label;
+    }
+    dpm($lookup);
+    if (isset($settings['updated'])) {
+      field_update_instance($instance);
+      unset($settings['updated']);
+    }
+    $summary = '';
+    // TODO, move to decent theme function ;)
+    foreach ($settings['displaymode'][$view_mode] as $flexinode => $mode) {
+      $summary .= $lookup[$flexinode] . ' -> ' . $mode . '<br>';
+    }
+    return $summary;
+  }
+}
+
+/**
+ * Implements hook_field_formatter_view().
+ */
 function flexinode_field_formatter_view($flexinode_type, $flexinode, $field, $instance, $langcode, $items, $display) {
   $element = array();
   foreach ($items as $delta => $item) {
