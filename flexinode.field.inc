@@ -239,16 +239,20 @@ function flexinode_process_element($element, &$form_state, $form) {
 function flexinode_validate_element(&$element, &$form_state) {
   /* Save the flexinode if the form was submitted and not on the Add other button */
   if ($form_state['submitted'] && $form_state['triggering_element']['#parents'][0] != $element['#parents'][0]) {
+    array_pop($element['#parents']);
     $form_values = drupal_array_get_nested_value($form_state['input'], $element['#parents']);
-    $element_weight = (isset($form_values['_weight'])) ? $form_values['_weight'] : 0;
+    $form_values = $form_values[$element['#field_name']];
+    $weight = (isset($form_values['_weight'])) ? $form_values['_weight'] : $element['#weight'];
+    /**
+     * Check if there is a current flexinode, and if the flexinode is of the same type as the user selected
+     * or if the user selected none, in both cases delete current flexinode
+     */
     $flexinode_type = false;
     $flexinode = false;
     if (!empty($form_values['type'])) {
       $flexinode_type = entity_object_load($form_values['type'], 'flexinode_type');
     }
-    /* Check if there is a current flexinode, and if the flexinode is of the same type as the user selected
-     * or if the user selected none, in both cases delete current flexinode
-    */
+
     if (isset($form_values['flid']) && is_numeric($form_values['flid'])) {
       $flexinode = flexinode_field_get_entity($form_values['flid']);
       if (!is_object($flexinode_type)) {
@@ -271,8 +275,7 @@ function flexinode_validate_element(&$element, &$form_state) {
     if (is_object($flexinode)) {
       $flexinode->submit($element['content'], $form_state);
       if ($flexinode_type && $flexinode->flid) {
-        $values = array('_weight' => $element_weight, 'type' => $flexinode_type->id, 'flid' => $flexinode->flid);
-        array_pop($element['#parents']);
+        $values = array('_weight' => $weight, 'type' => $flexinode_type->id, 'flid' => $flexinode->flid);
         form_set_value($element, $values, $form_state);
       }
       else {
