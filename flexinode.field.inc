@@ -97,11 +97,12 @@ function flexinode_field_instance_settings_form($field, $instance) {
 
 /**
  * Implements hook_is_empty().
- *
- * TODO actually implement this ;)
  */
 function flexinode_field_is_empty($item, $field) {
-  return FALSE;
+  if (!isset($item['type'])) {
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -156,11 +157,7 @@ function flexinode_field_widget_form(&$form, &$form_state, $field, $instance, $l
       '#type' => 'hidden',
       '#value' => isset($items[$delta]['flid']) ? $items[$delta]['flid'] : NULL,
     );
-
-    ($field['cardinality'] == '-1') ? $unlimited_fields = true : $unlimited_fields = false;
-    #if ((!$unlimited_fields) || ($unlimited_fields && $delta == 0) || isset($items[$delta]['type'])) {
     $return = $element;
-    #}
   }
   return $return;
 }
@@ -209,16 +206,17 @@ function flexinode_process_element($element, &$form_state, $form) {
   $flexitype_form_state = drupal_array_get_nested_value($form_state['input'], $element['#parents']);
   $flexinode_type = false;
 
-  $type = null;
-  if (isset($flexitype_form_state['type']) && is_numeric($flexitype_form_state['type'])) {
-    $type = $flexitype_form_state['type'];
+  $type = false;
+  if (isset($flexitype_form_state['type'])) {
+    if (is_numeric($flexitype_form_state['type'])) {
+      $type = $flexitype_form_state['type'];
+    }
   }
   elseif (isset($element['type']['#loaded_value'])) {
     $type = $element['type']['#loaded_value'];
-
   }
   $flid = isset($element['flid']['#value']) ? $element['flid']['#value'] : null;
-  if (!is_null($type)) {
+  if ($type) {
     $element['type']['#default_value'] = $type;
     $flexinode_type = entity_object_load($type, 'flexinode_type');
     $flexinode_type = $flexinode_type->type;
@@ -248,19 +246,28 @@ function flexinode_validate_element(&$element, &$form_state) {
     if (!empty($form_values['type'])) {
       $flexinode_type = entity_object_load($form_values['type'], 'flexinode_type');
     }
-    /* Check if there is a current flexinode, and if the flexinode is of the same type as the user selected.
-     * if not delete the current flexinode, to prevent orphaned fields and initiate a new flexinode by the newly setted type
+    /* Check if there is a current flexinode, and if the flexinode is of the same type as the user selected
+     * or if the user selected none, in both cases delete current flexinode
     */
     if (isset($form_values['flid']) && is_numeric($form_values['flid'])) {
       $flexinode = flexinode_field_get_entity($form_values['flid']);
-      if ($flexinode->type != $flexinode_type->type) {
+      if (!is_object($flexinode_type)) {
+        $flexinode->delete();
+      }
+      elseif ($flexinode->type != $flexinode_type->type) {
         $flexinode->delete();
         $flexinode = flexinode_field_get_entity(NULL, $flexinode_type->type);
       }
     }
+      /**
+       * User created a new flexinode.
+       */
     elseif ($flexinode_type) {
       $flexinode = flexinode_field_get_entity(NULL, $flexinode_type->type);
     }
+    /**
+     * If there is a flexinode, save it and attach the newly created type & flid to the form_state.
+     */
     if (is_object($flexinode)) {
       $flexinode->submit($element['content'], $form_state);
       if ($flexinode_type && $flexinode->flid) {
