@@ -338,7 +338,7 @@ function flexinode_field_formatter_settings_form($field, $instance, $view_mode, 
       $form['displaymode'][$view_mode][$referencable->type] = array(
         '#type' => 'select',
         '#options' => $viewmodes,
-        '#title' => $referencable->label,
+        '#title' => check_plain($referencable->label),
       );
     }
   }
