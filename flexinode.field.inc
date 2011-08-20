@@ -134,45 +134,41 @@ function flexinode_field_widget_form(&$form, &$form_state, $field, $instance, $l
   $return = NULL;
   if ($instance['widget']['type'] == 'flexinode_field_widget') {
 
-    ($field['cardinality'] == '-1') ? $unlimited_fields = true : $unlimited_fields = false;
-
     $element_name = 'fc_' . $field['field_name'] . '_' . $delta;
-    $available_flexinode_types = array(NULL => t('none'));
-    $all_flexinode_types = flexinode_get_types(NULL, TRUE);
-    foreach ($all_flexinode_types as $id => $flexinode_type) {
-      if (in_array($id, array_values($field['settings']['referenceable_types']))) {
-        $available_flexinode_types[$id] = $flexinode_type->label;
-      }
-    }
     $element[$element_name] = array(
       '#field_name' => $element_name,
       '#type' => 'container',
-      '#flexi' => isset($items[$delta]) ? $items[$delta] : NULL,
       '#title' => t('flexifield item'),
-      '#delta' => $delta,
       '#tree' => TRUE,
-      '#weight' => $delta,
       '#language' => $langcode,
       '#process' => array('flexinode_process_element'), // this is where the subform is attached
       '#element_validate' => array('flexinode_validate_element'), // this where the subform get's saved.
     );
-    $element[$element_name]['select'] = array(
-      '#delta' => $delta,
+
+    $element[$element_name]['type'] = array(
       '#type' => 'select',
       '#language' => $langcode,
       '#required' => FALSE,
-      '#options' => $available_flexinode_types,
+      '#options' => flexinode_get_flexinodetypes($field),
     );
+
+    $element[$element_name]['flid'] = array(
+      '#type' => 'hidden',
+      '#value' => isset($items[$delta]) ? $items[$delta] : NULL,
+    );
+
+    // TODO cleanup this goo..
     if (!isset($form_state['triggering_element'])) {
       if (isset($items[$delta]['type'])) {
         $element[$element_name]['select']['#default_value'] = $items[$delta]['type'];
-        drupal_array_set_nested_value(
-          $form_state['input'],
-          array($element['#field_name'], $langcode, $delta, $element_name),
-          array('select' => $items[$delta]['type'])
+        drupal_array_set_nested_value($form_state['input'],
+                                      array($element['#field_name'], $langcode, $delta, $element_name),
+                                      array('select' => $items[$delta]['type'])
         );
       }
     }
+
+    ($field['cardinality'] == '-1') ? $unlimited_fields = true : $unlimited_fields = false;
     if ((!$unlimited_fields) || ($unlimited_fields && $delta == 0)) {
       $return = $element;
     }
@@ -205,35 +201,35 @@ function flexinode_widget_ajax_callback($form, &$form_state) {
  */
 function flexinode_process_element($element, &$form_state, $form) {
   $target_element = 'ajax_' . $element['#field_name'];
+  // placeholder for the new embedded form
   $element['content'] = array(
     '#prefix' => '<div id="' . $target_element . '">',
     '#suffix' => '</div>',
     '#field_name' => 'content',
-    '#delta' => $element['#delta'],
     '#type' => 'container',
     '#tree' => TRUE,
     '#language' => $element['#language'],
     '#parents' => array_merge($element['#parents'], array('content')),
   );
-  $element['select']['#ajax'] = array(
+
+  // add AJAX to the dropdown selector that replaces the above created container.
+  $element['type']['#ajax'] = array(
     'callback' => 'flexinode_widget_ajax_callback',
     'wrapper' => $target_element,
     'method' => 'replace',
     'effect' => 'slide',
     'progress' => array('type' => 'throbber'),
   );
-
   $flexitype_form_state = drupal_array_get_nested_value($form_state['input'], $element['#parents']);
   $flexinode_type = false;
-  if (isset($flexitype_form_state['select'])) {
-    if (!empty($flexitype_form_state['select'])) {
-      $flexinode_type = entity_object_load($flexitype_form_state['select'], 'flexinode_type');
+  if (isset($flexitype_form_state['type'])) {
+    if (!empty($flexitype_form_state['type'])) {
+      $flexinode_type = entity_object_load($flexitype_form_state['type'], 'flexinode_type');
       $flexinode_type = $flexinode_type->type;
     }
   }
-  $flid = (isset($element['#flexi']['flid'])) ? $element['#flexi']['flid'] : NULL;
+  $flid = $flexitype_form_state['flid'];
   $flexinode = flexinode_field_get_entity($flid, $flexinode_type);
-  // if the type has changed, init a new flexinode to attach.
   if ($flexinode->type != $flexinode_type) {
     $flexinode = flexinode_field_get_entity(NULL, $flexinode_type);
   }
@@ -254,14 +250,11 @@ function flexinode_validate_element(&$element, &$form_state) {
   if ($form_state['submitted']) {
     // Most likely this was the add more button instead of submit.
     if ($form_state['triggering_element']['#parents'][0] != $element['#parents'][0]) {
-      $parents = $element['#parents'];
-      array_pop($parents);
-      array_pop($parents);
-      $parents[] = $element['#delta'];
-      // fetch the submited values including the weight..
-      $form_values = drupal_array_get_nested_value($form_state['input'], $parents);
+      $form_values = drupal_array_get_nested_value($form_state['input'], $element['#parents']);
+      dpm($form_values);
       $element_weight = $form_values['_weight'];
       $parents[] = $element['#field_name'];
+
       // transpose just values needed.
       $form_values = $form_values[$element['#field_name']];
       $flexinode_type = false;
@@ -310,7 +303,7 @@ function flexinode_validate_element(&$element, &$form_state) {
  */
 function flexinode_field_get_entity($flid = NULL, $type = NULL) {
   $return = FALSE;
-  if (isset($flid)) {
+  if (is_numeric($flid)) {
     $return = flexinode_load_flexinode($flid);
   }
   elseif (isset($type)) {
@@ -340,4 +333,25 @@ function flexinode_field_delete($entity_type, $entity, $field, $instance, $langc
     if (isset($item['flid'])) $flids += $item['flid'];
   }
   flexinode_delete_multiple($flids);
+}
+
+/**
+ * Returns available flexinode_types for a given field.
+ * @param $field
+ * @return array
+ */
+function flexinode_get_flexinodetypes($field) {
+  $name = '_flexinodetype_' . $field['field_name'];
+  $available_flexinode_types = drupal_static($name);
+  if (!$available_flexinode_types) {
+    $available_flexinode_types = array(NULL => t('none'));
+    $all_flexinode_types = flexinode_get_types(NULL, TRUE);
+    foreach ($all_flexinode_types as $id => $flexinode_type) {
+      if (in_array($id, array_values($field['settings']['referenceable_types']))) {
+        $available_flexinode_types[$id] = $flexinode_type->label;
+      }
+    }
+    drupal_static($name, $available_flexinode_types);
+  }
+  return $available_flexinode_types;
 }
