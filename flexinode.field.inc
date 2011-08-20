@@ -247,54 +247,36 @@ function flexinode_process_element($element, &$form_state, $form) {
  *
  */
 function flexinode_validate_element(&$element, &$form_state) {
-  if ($form_state['submitted']) {
-    // Most likely this was the add more button instead of submit.
-    if ($form_state['triggering_element']['#parents'][0] != $element['#parents'][0]) {
+  /* Save the flexinode if the form was submitted and not on the Add other button */
+  if ($form_state['submitted'] && $form_state['triggering_element']['#parents'][0] != $element['#parents'][0]) {
       $form_values = drupal_array_get_nested_value($form_state['input'], $element['#parents']);
-      dpm($form_values);
-      $element_weight = $form_values['_weight'];
-      $parents[] = $element['#field_name'];
-
-      // transpose just values needed.
-      $form_values = $form_values[$element['#field_name']];
+      $element_weight = (isset($form_values['_weight'])) ? $form_values['_weight'] : 0;
       $flexinode_type = false;
       $flexinode = false;
-
-      if (!empty($form_values['select'])) {
+      if (!empty($form_values['type'])) {
         $flexinode_type = entity_object_load($form_values['select'], 'flexinode_type');
       }
-      $update = false;
-      if (isset($element['#flexi']['flid'])) {
-        $update = true;
-        $flexinode = flexinode_field_get_entity($element['#flexi']['flid'], $flexinode_type->type);
-      }
-      /*
-      * If there is no type set by the user, or the type has changed. Delete
-      * the current flexinode, to prevent orphaned fields.
+      /* Check if there is a current flexinode, and if the flexinode is of the same type as the user selected.
+       * if not delete the current flexinode, to prevent orphaned fields and initiate a new flexinode by the newly setted type
       */
-      if (is_object($flexinode)) {
-        if ((!$flexinode_type) || ($flexinode->type != $flexinode_type->type)) {
+      if (is_numeric($form_values['flid'])) {
+        $flexinode = flexinode_field_get_entity($form_values['flid']);
+        if ($flexinode->type != $flexinode_type->type) {
           $flexinode->delete();
-          $update = false;
+          $flexinode = flexinode_field_get_entity(NULL, $flexinode_type->type);
         }
-      }
-
-      if ($flexinode_type && !$update) {
-        $flexinode = flexinode_field_get_entity(NULL, $flexinode_type->type);
       }
       if (is_object($flexinode)) {
         $flexinode->submit($element['content'], $form_state);
         if ($flexinode_type && $flexinode->flid) {
           $values = array('_weight' => $element_weight, 'type' => $flexinode_type->id, 'flid' => $flexinode->flid);
-          array_pop($element['#parents']);
           form_set_value($element, $values, $form_state);
         }
         else {
-          // this should not happen, perhaps throw error ;)
+          form_error($element['field_name'], t('Could not save !fieldname'), array('!fieldname' => $element['field_name']));
         }
       }
     }
-  }
 }
 
 
