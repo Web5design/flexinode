@@ -158,9 +158,9 @@ function flexinode_field_widget_form(&$form, &$form_state, $field, $instance, $l
     );
 
     ($field['cardinality'] == '-1') ? $unlimited_fields = true : $unlimited_fields = false;
-    if ((!$unlimited_fields) || ($unlimited_fields && $delta == 0) || isset($items[$delta]['type'])) {
-      $return = $element;
-    }
+    #if ((!$unlimited_fields) || ($unlimited_fields && $delta == 0) || isset($items[$delta]['type'])) {
+    $return = $element;
+    #}
   }
   return $return;
 }
@@ -186,7 +186,6 @@ function flexinode_widget_ajax_callback($form, &$form_state) {
  * @return array
  */
 function flexinode_process_element($element, &$form_state, $form) {
-
   $target_element = 'ajax_' . $element['#field_name'];
   // placeholder for the new embedded form
   $element['content'] = array(
@@ -210,24 +209,25 @@ function flexinode_process_element($element, &$form_state, $form) {
   $flexitype_form_state = drupal_array_get_nested_value($form_state['input'], $element['#parents']);
   $flexinode_type = false;
 
+  $type = null;
   if (isset($flexitype_form_state['type']) && is_numeric($flexitype_form_state['type'])) {
     $type = $flexitype_form_state['type'];
   }
-  elseif ($element['type']['#loaded_value']) {
+  elseif (isset($element['type']['#loaded_value'])) {
     $type = $element['type']['#loaded_value'];
 
   }
   $flid = isset($element['flid']['#value']) ? $element['flid']['#value'] : null;
-
-  $element['type']['#default_value'] = $type;
-  $flexinode_type = entity_object_load($type, 'flexinode_type');
-  $flexinode_type = $flexinode_type->type;
-
-  $flexinode = flexinode_field_get_entity($flid, $flexinode_type);
-  if ($flexinode->type != $flexinode_type) {
-    $flexinode = flexinode_field_get_entity(NULL, $flexinode_type);
+  if (!is_null($type)) {
+    $element['type']['#default_value'] = $type;
+    $flexinode_type = entity_object_load($type, 'flexinode_type');
+    $flexinode_type = $flexinode_type->type;
+    $flexinode = flexinode_field_get_entity($flid, $flexinode_type);
+    if ($flexinode->type != $flexinode_type) {
+      $flexinode = flexinode_field_get_entity(NULL, $flexinode_type);
+    }
+    field_attach_form('flexinode', $flexinode, $element['content'], $form_state, $element['#language']);
   }
-  field_attach_form('flexinode', $flexinode, $element['content'], $form_state, $element['#language']);
   return $element;
 }
 
