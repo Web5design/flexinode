@@ -133,7 +133,6 @@ function flexinode_field_widget_info() {
 function flexinode_field_widget_form(&$form, &$form_state, $field, $instance, $langcode, $items, $delta, $element) {
   $return = NULL;
   if ($instance['widget']['type'] == 'flexinode_field_widget') {
-
     $element_name = 'fc_' . $field['field_name'] . '_' . $delta;
     $element[$element_name] = array(
       '#field_name' => $element_name,
@@ -150,29 +149,16 @@ function flexinode_field_widget_form(&$form, &$form_state, $field, $instance, $l
       '#language' => $langcode,
       '#required' => FALSE,
       '#options' => flexinode_get_flexinodetypes($field),
+      '#loaded_value' => isset($items[$delta]['type']) ? $items[$delta]['type'] : NULL,
     );
 
     $element[$element_name]['flid'] = array(
       '#type' => 'hidden',
-      '#value' => isset($items[$delta]) ? $items[$delta] : NULL,
+      '#value' => isset($items[$delta]['flid']) ? $items[$delta]['flid'] : NULL,
     );
 
-    // TODO cleanup this goo..
-    if (!isset($form_state['triggering_element'])) {
-      if (isset($items[$delta]['type'])) {
-        $element[$element_name]['select']['#default_value'] = $items[$delta]['type'];
-        drupal_array_set_nested_value($form_state['input'],
-                                      array($element['#field_name'], $langcode, $delta, $element_name),
-                                      array('select' => $items[$delta]['type'])
-        );
-      }
-    }
-
     ($field['cardinality'] == '-1') ? $unlimited_fields = true : $unlimited_fields = false;
-    if ((!$unlimited_fields) || ($unlimited_fields && $delta == 0)) {
-      $return = $element;
-    }
-    elseif ((isset($items[$delta]['type'])) || isset($form_state['triggering_element'])) {
+    if ((!$unlimited_fields) || ($unlimited_fields && $delta == 0) || isset($items[$delta]['type'])) {
       $return = $element;
     }
   }
@@ -200,6 +186,7 @@ function flexinode_widget_ajax_callback($form, &$form_state) {
  * @return array
  */
 function flexinode_process_element($element, &$form_state, $form) {
+
   $target_element = 'ajax_' . $element['#field_name'];
   // placeholder for the new embedded form
   $element['content'] = array(
@@ -209,7 +196,7 @@ function flexinode_process_element($element, &$form_state, $form) {
     '#type' => 'container',
     '#tree' => TRUE,
     '#language' => $element['#language'],
-    '#parents' => array_merge($element['#parents'], array('content')),
+    '#parents' => $element['#parents'],
   );
 
   // add AJAX to the dropdown selector that replaces the above created container.
@@ -222,13 +209,20 @@ function flexinode_process_element($element, &$form_state, $form) {
   );
   $flexitype_form_state = drupal_array_get_nested_value($form_state['input'], $element['#parents']);
   $flexinode_type = false;
-  if (isset($flexitype_form_state['type'])) {
-    if (!empty($flexitype_form_state['type'])) {
-      $flexinode_type = entity_object_load($flexitype_form_state['type'], 'flexinode_type');
-      $flexinode_type = $flexinode_type->type;
-    }
+
+  if (isset($flexitype_form_state['type']) && is_numeric($flexitype_form_state['type'])) {
+    $type = $flexitype_form_state['type'];
   }
-  $flid = $flexitype_form_state['flid'];
+  elseif ($element['type']['#loaded_value']) {
+    $type = $element['type']['#loaded_value'];
+
+  }
+  $flid = isset($element['flid']['#value']) ? $element['flid']['#value'] : null;
+
+  $element['type']['#default_value'] = $type;
+  $flexinode_type = entity_object_load($type, 'flexinode_type');
+  $flexinode_type = $flexinode_type->type;
+
   $flexinode = flexinode_field_get_entity($flid, $flexinode_type);
   if ($flexinode->type != $flexinode_type) {
     $flexinode = flexinode_field_get_entity(NULL, $flexinode_type);
@@ -243,40 +237,42 @@ function flexinode_process_element($element, &$form_state, $form) {
  * If the form is submitted, filter out the flexinodes, save them and set
  * the value according to flexinode_field_schema();
  *
- * TODO Does not validate at this moment, and clean up.. feels to dirty..
- *
  */
 function flexinode_validate_element(&$element, &$form_state) {
   /* Save the flexinode if the form was submitted and not on the Add other button */
   if ($form_state['submitted'] && $form_state['triggering_element']['#parents'][0] != $element['#parents'][0]) {
-      $form_values = drupal_array_get_nested_value($form_state['input'], $element['#parents']);
-      $element_weight = (isset($form_values['_weight'])) ? $form_values['_weight'] : 0;
-      $flexinode_type = false;
-      $flexinode = false;
-      if (!empty($form_values['type'])) {
-        $flexinode_type = entity_object_load($form_values['select'], 'flexinode_type');
-      }
-      /* Check if there is a current flexinode, and if the flexinode is of the same type as the user selected.
-       * if not delete the current flexinode, to prevent orphaned fields and initiate a new flexinode by the newly setted type
-      */
-      if (is_numeric($form_values['flid'])) {
-        $flexinode = flexinode_field_get_entity($form_values['flid']);
-        if ($flexinode->type != $flexinode_type->type) {
-          $flexinode->delete();
-          $flexinode = flexinode_field_get_entity(NULL, $flexinode_type->type);
-        }
-      }
-      if (is_object($flexinode)) {
-        $flexinode->submit($element['content'], $form_state);
-        if ($flexinode_type && $flexinode->flid) {
-          $values = array('_weight' => $element_weight, 'type' => $flexinode_type->id, 'flid' => $flexinode->flid);
-          form_set_value($element, $values, $form_state);
-        }
-        else {
-          form_error($element['field_name'], t('Could not save !fieldname'), array('!fieldname' => $element['field_name']));
-        }
+    $form_values = drupal_array_get_nested_value($form_state['input'], $element['#parents']);
+    $element_weight = (isset($form_values['_weight'])) ? $form_values['_weight'] : 0;
+    $flexinode_type = false;
+    $flexinode = false;
+    if (!empty($form_values['type'])) {
+      $flexinode_type = entity_object_load($form_values['type'], 'flexinode_type');
+    }
+    /* Check if there is a current flexinode, and if the flexinode is of the same type as the user selected.
+     * if not delete the current flexinode, to prevent orphaned fields and initiate a new flexinode by the newly setted type
+    */
+    if (isset($form_values['flid']) && is_numeric($form_values['flid'])) {
+      $flexinode = flexinode_field_get_entity($form_values['flid']);
+      if ($flexinode->type != $flexinode_type->type) {
+        $flexinode->delete();
+        $flexinode = flexinode_field_get_entity(NULL, $flexinode_type->type);
       }
     }
+    elseif ($flexinode_type) {
+      $flexinode = flexinode_field_get_entity(NULL, $flexinode_type->type);
+    }
+    if (is_object($flexinode)) {
+      $flexinode->submit($element['content'], $form_state);
+      if ($flexinode_type && $flexinode->flid) {
+        $values = array('_weight' => $element_weight, 'type' => $flexinode_type->id, 'flid' => $flexinode->flid);
+        array_pop($element['#parents']);
+        form_set_value($element, $values, $form_state);
+      }
+      else {
+        form_error($element['field_name'], t('Could not save !fieldname'), array('!fieldname' => $element['field_name']));
+      }
+    }
+  }
 }
 
 
