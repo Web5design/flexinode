@@ -39,6 +39,12 @@ class FlexinodeTypeUIController extends EntityDefaultUIController {
     public function hook_menu() {
         $items = parent::hook_menu();
         $items[$this->path]['description'] = 'Manage flexinode types';
+        foreach ($items as &$item){
+          if (isset($item['access callback'])){
+            $item['access callback'] = 'flexinode_type_access';
+            $item['access arguments']  = array('administer flexinodes');
+          }
+        }
         return $items;
     }
 

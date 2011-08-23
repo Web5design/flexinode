@@ -32,7 +32,7 @@ function flexinode_entity_info() {
     'bundle keys' => array(
       'bundle' => 'type',
     ),
-      'view modes' => array(
+    'view modes' => array(
       'full' => array(
         'label' => t('Full content'),
         'custom settings' => FALSE,
@@ -69,10 +69,7 @@ function flexinode_entity_info() {
       'name' => 'type',
       'label' => 'label',
     ),
-
-    'access callback' => 'flexinode_type_access',
     'module' => 'flexinode',
-    // Enable the entity API's admin UI.
     'admin ui' => array(
       'path' => 'admin/structure/flexinodes',
       'file' => 'flexinode.ui.controllers.inc',
@@ -93,12 +90,26 @@ function flexinode_entity_info_alter(&$entity_info) {
         'path' => 'admin/structure/flexinodes/manage/%flexinode_type',
         'real path' => 'admin/structure/flexinodes/manage/' . $type,
         'bundle argument' => 4,
-        'access arguments' => array('administer model types'),
+        'access arguments' => array('administer flexinodes'),
       ),
     );
   }
 }
 
+
+/**
+ * Implements hook_entity_metadata_hook_entity_info().
+ * @return array
+ */
+function flexinode_metadata_hook_entity_info() {
+  return array(
+    'flexinode' => array(
+      'label' => t('Flexinode'),
+      'access callback' => 'flexinode_type_access',
+      'access arguments' => array('administer flexinodes'),
+    ),
+  );
+}
 
 /**
  * Returns either all the types or the $type_name flexinode_type
@@ -136,9 +147,9 @@ function flexinode_type_load($type) {
  */
 function flexinode_permission() {
   $permissions = array(
-    'administer flexinode types' => array(
-      'title' => t('Administer model types'),
-      'description' => t('Create and delete fields for flexinode types'),
+    'administer flexinodes' => array(
+      'title' => t('Administer flexinodes'),
+      'description' => t('Administer fields on flexinode types'),
     ),
   );
   return $permissions;
@@ -147,9 +158,8 @@ function flexinode_permission() {
 /**
  * Implements the above definied permission check
  */
-function flexinode_type_access($op, $type = NULL, $account = NULL) {
-  return TRUE;
-  #return user_access('administer flexinode types', $account);
+function flexinode_type_access($op) {
+  return user_access($op);
 }
 
 //see entity_get_info() why ;) hint : 'load hook' => $name . '_load'
