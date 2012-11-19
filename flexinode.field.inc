@@ -246,9 +246,9 @@ function flexinode_validate_element(&$element, &$form_state) {
   if ($form_state['submitted'] && $form_state['triggering_element']['#parents'][0] != $element['#parents'][0]) {
     array_pop($element['#parents']);
     $form_values = drupal_array_get_nested_value($form_state['input'], $element['#parents']);
-    $form_values = $form_values[$element['#field_name']];
     $weight = (isset($form_values['_weight'])) ? $form_values['_weight']
             : $element['#weight'];
+    $form_values = $form_values[$element['#field_name']];
     /**
      * Check if there is a current flexinode, and if the flexinode is of the same type as the user selected
      * or if the user selected none, in both cases delete current flexinode
