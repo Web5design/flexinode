@@ -408,7 +408,9 @@ function flexinode_field_formatter_view($flexinode_type, $flexinode, $field, $in
 function flexinode_field_delete($entity_type, $entity, $field, $instance, $langcode, &$items) {
   $flids = array();
   foreach ($items as $item) {
-    if (isset($item['flid'])) $flids += $item['flid'];
+    if (isset($item['flid'])){
+      $flids[] = $item['flid'];
+    }
   }
   flexinode_delete_multiple($flids);
 }
