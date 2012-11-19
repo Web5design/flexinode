@@ -132,162 +132,229 @@ function flexinode_field_instance_settings_form($field, $instance) {
  * determined by the $items[$delta].
  */
 function flexinode_field_widget_form(&$form, &$form_state, $field, $instance, $langcode, $items, $delta, $element) {
-  $return = NULL;
-  if ($instance['widget']['type'] == 'flexinode_field_widget') {
-    $element_name = 'fc_' . $field['field_name'] . '_' . $delta;
-    $element[$element_name] = array(
-      '#field_name' => $element_name,
-      '#type' => 'container',
-      '#title' => t('flexifield item'),
-      '#tree' => TRUE,
-      '#language' => $langcode,
-      '#process' => array('flexinode_process_element'), // this is where the subform is attached
-      '#element_validate' => array('flexinode_validate_element'), // this where the subform get's saved.
-    );
 
+  static $recursion = 0;
 
-    $element[$element_name]['type'] = array(
-      '#type' => 'select',
-      '#language' => $langcode,
-      '#required' => FALSE,
-      '#options' => flexinode_get_flexinodetypes($instance),
-      '#loaded_value' => isset($items[$delta]['type']) ? $items[$delta]['type'] : NULL,
-    );
-
-    if ($field['cardinality'] == 1) {
-      $element[$element_name]['type']['#title'] = $instance['label'];
-    }
-
-    $element[$element_name]['flid'] = array(
-      '#type' => 'hidden',
-      '#value' => isset($items[$delta]['flid']) ? $items[$delta]['flid'] : NULL,
-    );
-    $return = $element;
+  // If the field collection item form contains another field collection,
+  // we might ran into a recursive loop. Prevent that.
+  if ($recursion++ > 3) {
+    drupal_set_message(t('The flexinode item form has not been embedded to avoid recursive loops.'), 'error');
+    return $element;
   }
-  return $return;
-}
+  $field_parents = $element['#field_parents'];
+  $field_name = $element['#field_name'];
+  $language = $element['#language'];
 
-/**
- * The AJAX callback, replace's the form['content'] with the one generated
- * in flexinode_process_element.
- */
-function flexinode_widget_ajax_callback($form, &$form_state) {
-  $element = $form_state['triggering_element'];
-  array_pop($element['#array_parents']);
-  $subform = drupal_array_get_nested_value($form, $element['#array_parents']);
-  return $subform['content'];
-}
+  // Nest the flexifield entity form in a dedicated parent space,
+  // by appending [field_name, langcode, delta] to the current parent space.
+  // That way the form values of the field collection item are separated.
+  $parents = array_merge($field_parents, array($field_name, $language, $delta));
 
-/**
- * Generates the embedded form based on the type set in form_state['input'] or
- * on the type if the record is being edited.
- *
- * @param $element array containing the element currently processed
- * @param $form_state array with form_state;
- * @param $form array actually this the duplicate form from $form_state[]
- * @return array
- */
-function flexinode_process_element($element, &$form_state, $form) {
-  $target_element = 'ajax_' . $element['#field_name'];
-  // placeholder for the new embedded form
-  $element['content'] = array(
-    '#prefix' => '<div id="' . $target_element . '">',
-    '#suffix' => '</div>',
-    '#field_name' => 'content',
+  $element += array(
+    '#element_validate' => array('flexinode_validate_element'),
+    '#parents' => $parents,
+  );
+
+  if ($field['cardinality'] == 1) {
+    $element['#type'] = 'fieldset';
+  }
+
+  $field_state = field_form_get_state($field_parents, $field_name, $language, $form_state);
+
+
+  if (isset($field_state['flexinode'][$delta])) {
+    $old_flexinode = $field_state['flexinode'][$delta]['flexinode'];
+    $old_flexinode_type = $field_state['flexinode'][$delta]['flexinode_type'];
+    $first_time = false;
+  }
+  else {
+    $first_time = true;
+    $old_type_id = isset($items[$delta]['type']) ? $items[$delta]['type'] : NULL;
+    if ($old_type_id) {
+      #TODO: Remove the check when the rest is working (type should never be set without flid)
+      $old_item_flid = isset($items[$delta]['flid'])  ? $items[$delta]['flid'] : NULL;
+
+      $create_clone = abs($old_item_flid) != $old_item_flid;
+      $old_item_flid = '' . abs($old_item_flid);
+      $old_flexinode = flexinode_field_get_entity($old_item_flid, $old_type_id);
+      if ($create_clone) {
+        $old_flexinode->flid = NULL;
+      }
+
+      $old_flexinode_type = entity_object_load($old_type_id, 'flexinode_type');
+    }
+    else {
+      $old_flexinode = null;
+      $old_flexinode_type = null;
+    }
+  }
+
+  $element['#element_validate'] = array('flexinode_validate_element');
+
+  $element['type'] = array(
+    '#type' => 'select',
+    '#language' => $langcode,
+    '#required' => FALSE,
+    '#options' => flexinode_get_flexinodetypes($instance),
+    '#default_value' => empty($old_flexinode_type) ? NULL : $old_flexinode_type->id,
+
+    '#ajax' => array(
+      'callback' => 'flexinode_widget_ajax_callback',
+       'wrapper' => 'flexifield-content-' . $delta,
+    ),
+  );
+
+  $element['container'] = array(
     '#type' => 'container',
-    '#tree' => TRUE,
-    '#language' => $element['#language'],
-    '#parents' => $element['#parents'],
+    '#prefix' => '<div id="flexifield-content-' . $delta .   '">',
+    '#suffix' => '</div>',
+    '#parents' => $parents,
   );
 
-  // add AJAX to the dropdown selector that replaces the above created container.
-  $element['type']['#ajax'] = array(
-    'callback' => 'flexinode_widget_ajax_callback',
-    'wrapper' => $target_element,
-    'method' => 'replace',
-    'effect' => 'slide',
-    'progress' => array('type' => 'throbber'),
-  );
-  $flexitype_form_state = drupal_array_get_nested_value($form_state['input'], $element['#parents']);
-  $flexinode_type = false;
 
-  $type = false;
-  if (isset($flexitype_form_state['type'])) {
-    if (is_numeric($flexitype_form_state['type'])) {
-      $type = $flexitype_form_state['type'];
+  $form_values = drupal_array_get_nested_value($form_state['input'], $element['#parents']);
+
+
+  if (!$first_time && isset($form_values['type']) && !empty($form_values['type'])) {
+    $submitted_flexinode_type = entity_object_load($form_values['type'], 'flexinode_type');
+    if (!is_object($submitted_flexinode_type)) {
+      $submitted_flexinode = null;
+    }
+    elseif (empty($old_flexinode_type) || ($old_flexinode->type != $submitted_flexinode_type->type)) {
+      $submitted_flexinode = flexinode_field_get_entity(NULL, $submitted_flexinode_type->type);
+    }
+    else {
+      $submitted_flexinode = $old_flexinode;
     }
   }
-  elseif (isset($element['type']['#loaded_value'])) {
-    $type = $element['type']['#loaded_value'];
+  else if (!$first_time) {
+    $submitted_flexinode = null;
+    $submitted_flexinode_type = null;
   }
-  $flid = isset($element['flid']['#value']) ? $element['flid']['#value'] : null;
-  if ($type) {
-    $element['type']['#default_value'] = $type;
-    $flexinode_type = entity_object_load($type, 'flexinode_type');
-    $flexinode_type = $flexinode_type->type;
-    $flexinode = flexinode_field_get_entity($flid, $flexinode_type);
-    if ($flexinode->type != $flexinode_type) {
-      $flexinode = flexinode_field_get_entity(NULL, $flexinode_type);
-    }
-    field_attach_form('flexinode', $flexinode, $element['content'], $form_state, $element['#language']);
+  else {
+    $submitted_flexinode = $old_flexinode;
+    $submitted_flexinode_type = $old_flexinode_type;
   }
+
+
+  // Put our entity in the form state, so FAPI callbacks can access it.
+  $field_state['flexinode'][$delta] = array(
+    'flexinode' => $submitted_flexinode,
+    'flexinode_type' => $submitted_flexinode_type
+  );
+  field_form_set_state($field_parents, $field_name, $language, $form_state, $field_state);
+
+  if (!empty($submitted_flexinode)) {
+    field_attach_form('flexinode', $submitted_flexinode, $element['container'], $form_state, $language);
+  }
+
+  $recursion--;
   return $element;
+
+}
+
+
+function flexinode_widget_ajax_callback($form, $form_state) {
+  $triggering_element = $form_state['triggering_element'];
+  $path = $triggering_element['#array_parents'];
+  array_pop($path);
+  $flexifield_form  = drupal_array_get_nested_value($form, $path);
+  return $flexifield_form['container'];
 }
 
 /**
- * Implements hook_widget_validate().
- *
- * If the form is submitted, filter out the flexinodes, save them and set
- * the value according to flexinode_field_schema();
- *
+ * Flexinode form element validation.
  */
 function flexinode_validate_element(&$element, &$form_state) {
-  /* Save the flexinode if the form was submitted and not on the Add other button */
-  if ($form_state['submitted'] && $form_state['triggering_element']['#parents'][0] != $element['#parents'][0]) {
-    array_pop($element['#parents']);
-    $form_values = drupal_array_get_nested_value($form_state['input'], $element['#parents']);
-    $weight = (isset($form_values['_weight'])) ? $form_values['_weight']
-            : $element['#weight'];
-    $form_values = $form_values[$element['#field_name']];
-    /**
-     * Check if there is a current flexinode, and if the flexinode is of the same type as the user selected
-     * or if the user selected none, in both cases delete current flexinode
-     */
-    $flexinode_type = false;
-    $flexinode = false;
-    if (!empty($form_values['type'])) {
-      $flexinode_type = entity_object_load($form_values['type'], 'flexinode_type');
+  $field = field_widget_field($element, $form_state);
+  $field_parents = $element['#field_parents'];
+  $field_name = $element['#field_name'];
+  $language = $element['#language'];
+
+  $field_state = field_form_get_state($field_parents, $field_name, $language, $form_state);
+  $flexinode = $field_state['flexinode'][$element['#delta']]['flexinode'];
+  $flexinode_type = $field_state['flexinode'][$element['#delta']]['flexinode_type'];
+
+  if (!empty($flexinode)) {
+    // Attach field API validation of the embedded form.
+    field_attach_form_validate('flexinode', $flexinode, $element['container'], $form_state);
+  }
+
+  if ($form_state['submitted'] && !form_get_errors()) {
+
+    if (!empty($flexinode)) {
+      field_attach_submit('flexinode', $flexinode, $element['container'], $form_state);
     }
 
-    if (isset($form_values['flid']) && is_numeric($form_values['flid'])) {
-      $flexinode = flexinode_field_get_entity($form_values['flid']);
-      if (!is_object($flexinode_type)) {
-        $flexinode->delete();
+    // Set the _weight if it is a multiple field.
+    if (isset($element['_weight']) && ($field['cardinality'] > 1 || $field['cardinality'] == FIELD_CARDINALITY_UNLIMITED)) {
+      $item['_weight'] = $element['_weight']['#value'];
+    }
+    // Put the flexinode item in $item['flid'], so it is saved with
+    // the host entity via hook_field_presave() / field API if it is not empty.
+    // @see flexinde_field_presave()
+
+    if ($flexinode) {
+      $item['flid'] = $flexinode;
+      $item['type'] = $flexinode_type->id;
+    }
+    else {
+      $item['type'] = $item['flid'] = null;
+    }
+    form_set_value($element, $item, $form_state);
+  }
+  return;
+}
+
+/**
+ * Implements hook_field_presave().
+ */
+function flexinode_field_presave($entity_type, $entity, $field, $instance, $langcode, &$items) {
+
+  $new_items = array();
+
+  foreach ($items as $item) {
+
+    if (isset($item['flid']) && is_object($item['flid'])) {
+
+      $flexinode = $item['flid'];
+      $flexinode->is_new = isset($flexinode->is_new) ? $flexinode->is_new : 0;
+      if ($flexinode->is_new) {
+        $flexinode->created = time();
       }
-      elseif ($flexinode->type != $flexinode_type->type) {
-        $flexinode->delete();
-        $flexinode = flexinode_field_get_entity(NULL, $flexinode_type->type);
+      $flexinode->changed = time();
+      $flexinode->save();
+      $item['flid'] = $flexinode->flid;
+      $new_items[] = $item;
+    }
+  }
+  $items = $new_items;
+
+  if (!property_exists($entity, 'original')) {
+    return;
+  }
+
+  $original_items = field_get_items($entity_type,$entity->original,$field['field_name'],$langcode);
+
+  $items_to_delete = array();
+  if (!empty($original_items)) {
+    foreach ($original_items as $original_item) {
+      $found = false;
+      foreach ($items as $item) {
+        if ($item['flid'] == $original_item['flid']) {
+          $found = true;
+          break;
+        }
+      }
+      if (!$found) {
+        $items_to_delete[] = $original_item;
       }
     }
-      /**
-       * User created a new flexinode.
-       */
-    elseif ($flexinode_type) {
-      $flexinode = flexinode_field_get_entity(NULL, $flexinode_type->type);
-    }
-    /**
-     * If there is a flexinode, save it and attach the newly created type & flid to the form_state.
-     */
-    if (is_object($flexinode)) {
-      $flexinode->submit($element['content'], $form_state);
-      if ($flexinode_type && $flexinode->flid) {
-        $values = array('_weight' => $weight, 'type' => $flexinode_type->id, 'flid' => $flexinode->flid);
-        form_set_value($element, $values, $form_state);
-      }
-      else {
-        form_error($element['field_name'], t('Could not save !fieldname'), array('!fieldname' => $element['field_name']));
-      }
-    }
+  }
+
+  foreach ($items_to_delete as $item_to_delete) {
+    $flexinode = flexinode_field_get_entity($item_to_delete['flid']);
+    $flexinode->delete();
   }
 }
 
@@ -402,15 +469,14 @@ function flexinode_field_formatter_view($flexinode_type, $flexinode, $field, $in
 }
 
 
+
 /**
  * Implements hook_field_delete().
  */
 function flexinode_field_delete($entity_type, $entity, $field, $instance, $langcode, &$items) {
   $flids = array();
   foreach ($items as $item) {
-    if (isset($item['flid'])){
-      $flids[] = $item['flid'];
-    }
+    if (isset($item['flid'])) $flids[] = $item['flid'];
   }
   flexinode_delete_multiple($flids);
 }
@@ -434,4 +500,12 @@ function flexinode_get_flexinodetypes($field) {
     drupal_static($name, $available_flexinode_types);
   }
   return $available_flexinode_types;
+}
+
+
+
+function flexinode_field_prepare_translation($entity_type, $entity, $field, $instance, $langcode, &$items, $source_entity, $source_langcode)  {
+  foreach ($items as &$item) {
+    $item['flid'] = -$item['flid'];
+  }
 }

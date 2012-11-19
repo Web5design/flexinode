@@ -193,6 +193,40 @@ function flexinode_save(Flexinode $flexinode) {
 }
 
 
+
+
+
+/**
+ * 1. Adds theme hook suggestions for flexinode type specific templates.
+ * 2. Calls flexinode type specific preprocess hooks.
+ */
+function flexinode_preprocess_flexinode(&$variables)
+{
+  $all_flexinode_types = flexinode_get_types(NULL, TRUE);
+  foreach ($all_flexinode_types as $flexinode_type) {
+    $variables['theme_hook_suggestions'][] = 'flexinode__' . $flexinode_type->type;
+    $hook_name = 'preprocess_flexinode_' . $flexinode_type->type;
+    foreach (module_implements($hook_name) as $module) {
+      $function = $module . '_' . $hook_name;
+      $function($variables);
+    }
+  }
+}
+
+/**
+ * hook_theme
+ */
+function flexinode_theme($existing, $type, $theme, $path)
+{
+  return array(
+    'flexinode' => array(
+      'variables' => array('element' => null),
+      'template' => 'flexinode',
+      'path' => drupal_get_path('module', 'flexinode') . '/theme',
+    ),
+  );
+}
+
 /**
  * The class used for model entities
  */
