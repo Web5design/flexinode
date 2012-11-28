@@ -191,6 +191,9 @@ function flexinode_field_widget_form(&$form, &$form_state, $field, $instance, $l
 
   $element['#element_validate'] = array('flexinode_validate_element');
 
+  // Determine the parent delta.
+  $parent_delta = (isset($field_parents[2])) ? $field_parents[2]. '-' : '';
+  
   $element['type'] = array(
     '#type' => 'select',
     '#language' => $langcode,
@@ -198,15 +201,17 @@ function flexinode_field_widget_form(&$form, &$form_state, $field, $instance, $l
     '#options' => flexinode_get_flexinodetypes($instance),
     '#default_value' => empty($old_flexinode_type) ? NULL : $old_flexinode_type->id,
 
+  	// We need to distinguish the wrapper (the ajax wrapper as well) by a combination from delta and the parent delta to avoid unwanted overwriting by ajax. 
+  	// This would work like a coordinate and should be save for all nesting levels.
     '#ajax' => array(
       'callback' => 'flexinode_widget_ajax_callback',
-       'wrapper' => 'flexifield-content-' . $delta,
+       'wrapper' => 'flexifield-content-' . $parent_delta . '-' . $delta,
     ),
   );
 
   $element['container'] = array(
     '#type' => 'container',
-    '#prefix' => '<div id="flexifield-content-' . $delta .   '">',
+    '#prefix' => '<div id="flexifield-content-' . $parent_delta . '-' . $delta .   '">',
     '#suffix' => '</div>',
     '#parents' => $parents,
   );
