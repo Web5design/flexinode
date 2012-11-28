@@ -1,8 +1,8 @@
 ; $Id$ 
 name = Flexinode
-description = Provides entity based flexifield
+description = Provides entity api based flexifield type
 package = Contrib
-version = 7.0.0-beta-1
+version = 7.0.0-beta-3
 core = 7.x
 
 dependencies[] = entity

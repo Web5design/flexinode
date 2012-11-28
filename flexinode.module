@@ -69,6 +69,7 @@ function flexinode_entity_info() {
       'name' => 'type',
       'label' => 'label',
     ),
+    'access callback' => 'flexinode_type_access',
     'module' => 'flexinode',
     'admin ui' => array(
       'path' => 'admin/structure/flexinodes',
@@ -196,35 +197,94 @@ function flexinode_save(Flexinode $flexinode) {
 
 
 
-/**
- * 1. Adds theme hook suggestions for flexinode type specific templates.
- * 2. Calls flexinode type specific preprocess hooks.
- */
-function flexinode_preprocess_flexinode(&$variables)
-{
-  $all_flexinode_types = flexinode_get_types(NULL, TRUE);
-  foreach ($all_flexinode_types as $flexinode_type) {
-    $variables['theme_hook_suggestions'][] = 'flexinode__' . $flexinode_type->type;
-    $hook_name = 'preprocess_flexinode_' . $flexinode_type->type;
-    foreach (module_implements($hook_name) as $module) {
-      $function = $module . '_' . $hook_name;
-      $function($variables);
-    }
-  }
-}
+///**
+// * 1. Adds theme hook suggestions for flexinode type specific templates.
+// * 2. Calls flexinode type specific preprocess hooks.
+// */
+//function flexinode_preprocess_flexinode(&$variables)
+//{
+//  template_preprocess_entity($variables);
+//
+//  echo "<pre>@".__FILE__." line ".__LINE__."<br>";var_dump($variables);echo "</pre>";
+//  die("DIED @".__FILE__." line ".__LINE__);
+//
+//  $all_flexinode_types = flexinode_get_types(NULL, TRUE);
+//  foreach ($all_flexinode_types as $flexinode_type) {
+//    $variables['theme_hook_suggestions'][] = 'flexinode__' . $flexinode_type->type;
+//    $hook_name = 'preprocess_flexinode_' . $flexinode_type->type;
+//    foreach (module_implements($hook_name) as $module) {
+//      $function = $module . '_' . $hook_name;
+//      $function($variables);
+//    }
+//  }
+//}
 
+function flexinode_flexinode_view_alter(&$variables){
+ // $variables['#theme'] = 'flexinode';
+}
 /**
  * hook_theme
  */
-function flexinode_theme($existing, $type, $theme, $path)
+function flexinode_theme()
 {
   return array(
     'flexinode' => array(
-      'variables' => array('element' => null),
+      'render element' => 'elements',
       'template' => 'flexinode',
-      'path' => drupal_get_path('module', 'flexinode') . '/theme',
     ),
   );
+}
+
+function template_preprocess_flexinode(&$variables) {
+
+  $variables['view_mode'] = $variables['elements']['#view_mode'];
+  $entity_type = $variables['elements']['#entity_type'];
+  $variables['entity_type'] = $entity_type;
+  $entity = $variables['elements']['#entity'];
+  $variables[$variables['elements']['#entity_type']] = $entity;
+  $info = entity_get_info($entity_type);
+
+  $variables['title'] = check_plain(entity_label($entity_type, $entity));
+  if (isset($variables['elements']['#page'])) {
+    // If set by the caller, respect the page property.
+    $variables['page'] = $variables['elements']['#page'];
+  }
+  else {
+    // Else, try to automatically detect it.
+    $uri = entity_uri($entity_type, $entity);
+    $variables['url'] = $uri ? url($uri['path'], $uri['options']) : FALSE;
+    $variables['page'] = $uri && $uri['path'] == $_GET['q'];
+  }
+
+  // Helpful $content variable for templates.
+  $variables['content'] = array();
+  foreach (element_children($variables['elements']) as $key) {
+    $variables['content'][$key] = $variables['elements'][$key];
+  }
+
+  if (!empty($info['fieldable'])) {
+    // Make the field variables available with the appropriate language.
+    field_attach_preprocess($entity_type, $entity, $variables['content'], $variables);
+  }
+  list(, , $bundle) = entity_extract_ids($entity_type, $entity);
+
+  // Gather css classes.
+  $variables['classes_array'][] = drupal_html_class('entity-' . $entity_type);
+  $variables['classes_array'][] = drupal_html_class($entity_type . '-' . $bundle);
+
+  // Add RDF type and about URI.
+  if (module_exists('rdf')) {
+    $variables['attributes_array']['about'] = empty($uri['path']) ? NULL : url($uri['path']);
+    $variables['attributes_array']['typeof'] = empty($entity->rdf_mapping['rdftype']) ? NULL : $entity->rdf_mapping['rdftype'];
+  }
+
+  // Add suggestions.
+  $variables['theme_hook_suggestions'][] = $entity_type;
+  $variables['theme_hook_suggestions'][] = $entity_type . '__' . $bundle;
+  $variables['theme_hook_suggestions'][] = $entity_type . '__' . $bundle . '__' . $variables['view_mode'];
+  if ($id = entity_id($entity_type, $entity)) {
+    $variables['theme_hook_suggestions'][] = $entity_type . '__' . $id;
+  }
 }
 
 /**

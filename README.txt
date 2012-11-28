@@ -1,12 +1,11 @@
-A new implementation of the Drupal 6 flexifield (http://drupal.org/project/flexifield),
-and since this is not a straight forwarded port I believe this was worthy of a own project within the drupal Ecosphere.
+A ENTITY API based implementation of the Drupal 6 flexifield module (http://drupal.org/project/flexifield),
+This is not a port, from the above mentioned module, but a new from scratch implementation hence there is no upgrade path available.
+
 
 Flexinodes are fieldable entities that can be embedded into a host entity.
-The big difference between this and field_collection and other project like those is is that a host can have
-multiple variations of a flexinode attached instead of just one type.
-
-
-At this moment this module is for the advanced drupal user, since theming and UI support is at a very basic level.
+The main difference between this project and field_collection is that flexinodes allow a sitebuilder to define more then one fieldable flexinode entity per host field instead and share the flexinode entities between host fields. A true many to many relation between Host entity and flexinode's.
 
 More information at this moment can be found on my blog : http://renebakx.nl/65/sneak-peak-into-flexifields-for-drupal-7/
+
+A big thanks to the guys from Freie Formation and leonevers for providing some patches.
 

@@ -30,23 +30,6 @@ class flexinodeController extends EntityAPIController {
     $flexinode = parent::create($values);
     return $flexinode;
   }
-
-  public function save($entity, DatabaseTransaction $transaction = NULL) {
-    return parent::save($entity, $transaction);
-  }
-
-
-  /**
-   * Overriding the buldContent function to add entity specific fields
-   */
-  public function buildContent($entity, $view_mode = 'full', $langcode = NULL, $content = array()) {
-    return parent::buildContent($entity, $view_mode, $langcode, $content);
-  }
-
-  public function view($entities, $view_mode = 'full', $langcode = NULL, $page = NULL) {
-    $content = parent::view($entities, $view_mode, $langcode, $page);
-    return $content['flexinode'][$entities[0]->flid];
-  }
 }
 
 
