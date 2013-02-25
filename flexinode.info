@@ -1,15 +1,17 @@
 ; $Id$ 
 name = Flexinode
-description = Provides entity api based flexifield type
+description = Provides entity based flexifields
 package = Contrib
-version = 7.0.0-beta-3
+version = 7.1.0-beta-1
 core = 7.x
 
 dependencies[] = entity
 
 files[] = flexinode.module
-files[] = flexinode.field.inc
-files[] = flexinode.controllers.inc
-files[] = flexinode.ui.controllers.inc
 files[] = flexinode.install
+files[] = flexinode.field.inc
+files[] = flexinode.entity.inc
+files[] = flexinode.controller.inc
+files[] = flexinodetype.controller.inc
+
 

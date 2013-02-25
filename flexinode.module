@@ -1,6 +1,5 @@
 <?php
 /**
- * @file
  * Embedded a flexinode entity edit form into any other fieldable enity.
  * Giving you the power to define re-usable content types without writing complex forms
  *
@@ -11,21 +10,27 @@
 
 include_once("flexinode.field.inc");
 
-/**
- * Implements hook_entity_info().
- * @return array
- */
+
 function flexinode_entity_info() {
   $return['flexinode'] = array(
     'label' => t('Flexinode'),
+    'plural label' => t('Flexinodes'),
+    'description' => t('An entity type that can be embedded as a one2many field in other entities'),
     'entity class' => 'Flexinode',
     'controller class' => 'FlexinodeController',
-    'file' => 'flexinode.controllers.inc',
+    'file' => 'flexinode.controller.inc',
     'base table' => 'flexinode',
+    'revision table' => 'flexinode_revision',
+    'translation' => array(
+      'locale' => TRUE,
+    ),
     'fieldable' => TRUE,
     'entity keys' => array(
       'id' => 'flid',
       'bundle' => 'type',
+      'label' => 'label',
+      'revision' => 'vid',
+      'language' => 'language',
     ),
     // Bundles are defined by the flexinode types below and loaded in flexinode_entity_info_alter
     'bundles' => array(),
@@ -41,25 +46,34 @@ function flexinode_entity_info() {
         'label' => t('teaser'),
         'custom settings' => FALSE,
       ),
+      'rss' => array(
+        'label' => t('RSS'),
+        'custom settings' => FALSE,
+      ),
     ),
+    'module' => 'flexinode', // name of the module this entity belongs to
     'label callback' => 'entity_class_label',
     'uri callback' => 'entity_class_uri',
-    'creation callback' => 'flexinode_create',
-    'module' => 'flexinode', // name of the module this entity belongs to
-    // The information below is used by the ModelUIController (which extends the EntityDefaultUIController)
-    'admin ui' => array(
-      'path' => 'admin/content/flexinode',
-      'file' => 'flexinode.ui.controllers.inc',
-      'controller class' => 'FlexinodeUIController',
-      'menu wildcard' => '%flexinode',
-    ),
   );
-  // The entity bundle that holds information about the entity types
+  if (module_exists('search')) {
+    $return['flexinode']['view modes'] += array(
+      'search_index' => array(
+        'label' => t('Search index'),
+        'custom settings' => FALSE,
+      ),
+      'search_result' => array(
+        'label' => t('Search result'),
+        'custom settings' => FALSE,
+      ),
+    );
+  }
+
+  // The entity bundle that holds information about the flexinode types
   $return['flexinode_type'] = array(
     'label' => t('Flexinode Type'),
+    'plural label' => t('Flexinode types'),
     'entity class' => 'FlexinodeType',
-    'controller class' => 'FlexinodeTypeController',
-    'file' => 'flexinode.controllers.inc',
+    'controller class' => 'EntityAPIControllerExportable',
     'base table' => 'flexinode_type',
     'fieldable' => FALSE,
     'bundle of' => 'flexinode',
@@ -69,14 +83,20 @@ function flexinode_entity_info() {
       'name' => 'type',
       'label' => 'label',
     ),
-    'access callback' => 'flexinode_type_access',
     'module' => 'flexinode',
     'admin ui' => array(
+      'menu wildcard' => '%flexinode_type',
       'path' => 'admin/structure/flexinodes',
-      'file' => 'flexinode.ui.controllers.inc',
+      'file' => 'flexinodetype.controller.inc',
       'controller class' => 'FlexinodeTypeUIController',
     ),
   );
+
+  if (module_exists('entitycache')) {
+    $return['flexinode_type']['field cache'] = FALSE;
+    $return['flexinode_type']['entity cache'] = TRUE;
+  }
+
   return $return;
 }
 
@@ -97,6 +117,9 @@ function flexinode_entity_info_alter(&$entity_info) {
   }
 }
 
+function template_preprocess_flexinode(&$variables) {
+  template_preprocess_entity($variables);
+}
 
 /**
  * Implements hook_entity_metadata_hook_entity_info().
@@ -106,6 +129,7 @@ function flexinode_metadata_hook_entity_info() {
   return array(
     'flexinode' => array(
       'label' => t('Flexinode'),
+      'label callback' => 'entity_class_label',
       'access callback' => 'flexinode_type_access',
       'access arguments' => array('administer flexinodes'),
     ),
@@ -118,16 +142,24 @@ function flexinode_metadata_hook_entity_info() {
  * @return array|mixed
  */
 function flexinode_get_types($type_name = NULL, $indexed = FALSE) {
-  $types = entity_load_multiple_by_name('flexinode_type', isset($type_name) ? array($type_name)
-                                                                : FALSE);
+
+  $types = entity_load_multiple_by_name(
+    'flexinode_type',
+    isset($type_name) ? array($type_name)
+      : FALSE
+  );
   if ($indexed) {
     $return = array();
     foreach ($types as $type) {
       $return[$type->id] = $type;
     }
+
   }
   else {
     $return = isset($type_name) ? reset($types) : $types;
+  }
+  if (is_array($return)) {
+    ksort($return);
   }
   return $return;
 }
@@ -163,8 +195,18 @@ function flexinode_type_access($op) {
   return user_access($op);
 }
 
+function flexinode_theme() {
+  return array(
+    'flexinode' => array(
+      'render element' => 'elements',
+      'template' => 'flexinode',
+    ),
+  );
+}
+
+
 //see entity_get_info() why ;) hint : 'load hook' => $name . '_load'
-function flexinode_load_flexinode($flid, $reset = FALSE) {
+function flexinode_load($flid, $reset = FALSE) {
   $models = flexinode_load_multiple(array($flid), array(), $reset);
   return reset($models);
 }
@@ -194,153 +236,49 @@ function flexinode_save(Flexinode $flexinode) {
 }
 
 
-
-
-
-///**
-// * 1. Adds theme hook suggestions for flexinode type specific templates.
-// * 2. Calls flexinode type specific preprocess hooks.
-// */
-//function flexinode_preprocess_flexinode(&$variables)
-//{
-//  template_preprocess_entity($variables);
-//
-//  echo "<pre>@".__FILE__." line ".__LINE__."<br>";var_dump($variables);echo "</pre>";
-//  die("DIED @".__FILE__." line ".__LINE__);
-//
-//  $all_flexinode_types = flexinode_get_types(NULL, TRUE);
-//  foreach ($all_flexinode_types as $flexinode_type) {
-//    $variables['theme_hook_suggestions'][] = 'flexinode__' . $flexinode_type->type;
-//    $hook_name = 'preprocess_flexinode_' . $flexinode_type->type;
-//    foreach (module_implements($hook_name) as $module) {
-//      $function = $module . '_' . $hook_name;
-//      $function($variables);
-//    }
-//  }
-//}
-
-function flexinode_flexinode_view_alter(&$variables){
- // $variables['#theme'] = 'flexinode';
-}
 /**
- * hook_theme
+ * create and returns the entity, for viewing and embedding in the host entity.
  */
-function flexinode_theme()
-{
-  return array(
-    'flexinode' => array(
-      'render element' => 'elements',
-      'template' => 'flexinode',
-    ),
-  );
+function flexinode_field_get_entity(&$item, $reset = FALSE) {
+
+  if (isset($item['entity'])) {
+    return $item['entity'];
+  }
+  elseif (isset($item['flid']) && is_numeric($item['flid'])) {
+    // this load the default entity from the cache if available
+    $entity = flexinode_load($item['flid'],$reset);
+    if (!is_object($entity) || $entity->vid != $item['vid']) {
+      // and it seems that a cache hit was invalid or the revision is different. So load revision instead!
+      $entity = entity_revision_load('flexinode', $item['vid']);
+    }
+    $item['entity'] = $entity;
+    return $entity;
+  }
+  elseif (!isset($item['entity']) && (!is_null($item['type']) && $item['type'] !== '')) {
+    $item['entity'] = entity_create('flexinode', array('type' => $item['type']));
+    return $item['entity'];
+  }
+  return FALSE;
 }
 
-function template_preprocess_flexinode(&$variables) {
-
-  $variables['view_mode'] = $variables['elements']['#view_mode'];
-  $entity_type = $variables['elements']['#entity_type'];
-  $variables['entity_type'] = $entity_type;
-  $entity = $variables['elements']['#entity'];
-  $variables[$variables['elements']['#entity_type']] = $entity;
-  $info = entity_get_info($entity_type);
-
-  $variables['title'] = check_plain(entity_label($entity_type, $entity));
-  if (isset($variables['elements']['#page'])) {
-    // If set by the caller, respect the page property.
-    $variables['page'] = $variables['elements']['#page'];
-  }
-  else {
-    // Else, try to automatically detect it.
-    $uri = entity_uri($entity_type, $entity);
-    $variables['url'] = $uri ? url($uri['path'], $uri['options']) : FALSE;
-    $variables['page'] = $uri && $uri['path'] == $_GET['q'];
-  }
-
-  // Helpful $content variable for templates.
-  $variables['content'] = array();
-  foreach (element_children($variables['elements']) as $key) {
-    $variables['content'][$key] = $variables['elements'][$key];
-  }
-
-  if (!empty($info['fieldable'])) {
-    // Make the field variables available with the appropriate language.
-    field_attach_preprocess($entity_type, $entity, $variables['content'], $variables);
-  }
-  list(, , $bundle) = entity_extract_ids($entity_type, $entity);
-
-  // Gather css classes.
-  $variables['classes_array'][] = drupal_html_class('entity-' . $entity_type);
-  $variables['classes_array'][] = drupal_html_class($entity_type . '-' . $bundle);
-
-  // Add RDF type and about URI.
-  if (module_exists('rdf')) {
-    $variables['attributes_array']['about'] = empty($uri['path']) ? NULL : url($uri['path']);
-    $variables['attributes_array']['typeof'] = empty($entity->rdf_mapping['rdftype']) ? NULL : $entity->rdf_mapping['rdftype'];
-  }
-
-  // Add suggestions.
-  $variables['theme_hook_suggestions'][] = $entity_type;
-  $variables['theme_hook_suggestions'][] = $entity_type . '__' . $bundle;
-  $variables['theme_hook_suggestions'][] = $entity_type . '__' . $bundle . '__' . $variables['view_mode'];
-  if ($id = entity_id($entity_type, $entity)) {
-    $variables['theme_hook_suggestions'][] = $entity_type . '__' . $id;
-  }
-}
 
 /**
- * The class used for model entities
+ * Implements hook_field_formatter_view().
  */
-class Flexinode extends Entity {
-  public $is_new, $flid, $created, $changed;
-
-  public function __construct($values = array()) {
-    parent::__construct($values, 'flexinode');
-  }
-
-  /**
-   * Handles the creating/updating for a embedded flexinode, moves the fields from ['content'] into the correct position
-   * to be further processed and saved.
-   * The fields are already processed on the submission of the host form, so just copy and save.
-   *
-   * @param $form Array subform used to create this flexinode
-   * @param $form_state
-   * @return $flid PK of the newly created flexinode
-   */
-  public function submit($form, $form_state) {
-
-    if ($this->is_new = isset($this->is_new) ? $this->is_new : 0) {
-      $this->created = time();
+function flexinode_field_formatter_view($flexinode_type, $flexinode, $field, $instance, $langcode, $items, $display) {
+  $element = array();
+  foreach ($items as $delta => &$item) {
+    flexinode_field_get_entity($item);
+    if ($flexinode) {
+      switch ($display['type']) {
+        case 'flexinode_default':
+        default:
+          $element[$delta] = $item['entity']->view();
+          break;
+      }
     }
-    field_attach_submit($this->entityType, $this, $form, $form_state);
-    $this->changed = time();
-    $this->save();
   }
-
-  protected function defaultLabel() {
-    if (isset($this->type)) {
-      return t('Flexinode') . ' ' . $this->type;
-    }
-    return t('Flexinode');
-  }
-
-  protected function defaultUri() {
-    return array('path' => 'flexinode/' . $this->flid);
-  }
-
-  public function create(array $values = array()) {
-    // Add values that are specific to our Model
-    $values += array(
-      'flid' => '',
-      'is_new' => TRUE,
-      'title' => '',
-      'created' => '',
-      'changed' => '',
-    );
-
-    $flexinode = parent::create($values);
-    return $flexinode;
-  }
-
+  return $element;
 }
 
 
@@ -355,8 +293,9 @@ class FlexinodeType extends Entity {
 
   public function __construct($values = array()) {
     if ($values) {
-      $values['module'] = 'flexinode'; // set module to flexinode not sure if this needed..
-      if (!isset($values['status'])) $values['status'] = ENTITY_IN_DB;
+      if (!isset($values['status'])) {
+        $values['status'] = ENTITY_CUSTOM;
+      }
     }
     parent::__construct($values, 'flexinode_type');
   }
@@ -364,4 +303,24 @@ class FlexinodeType extends Entity {
 
 }
 
+class FlexinodeTypeMetadataController extends EntityDefaultMetadataController {
 
+  public function entityPropertyInfo() {
+    $info = parent::entityPropertyInfo();
+    $properties = & $info['flexinode_type']['properties'];
+
+    $properties['field_name']['label'] = t('Field name');
+    $properties['field_name']['description'] = t('The machine-readable name of the flexinode field containing this item.');
+    $properties['field_name']['required'] = TRUE;
+
+    $properties['type'] = array(
+      'label' => t('Flexinode type'),
+      'type' => 'token',
+      'description' => t('machine name of the flexinode'),
+      'required' => TRUE,
+    );
+
+    return $info;
+  }
+
+}

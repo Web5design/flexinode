@@ -22,66 +22,168 @@ function flexinode_schema() {
         'unsigned' => TRUE,
         'not null' => TRUE,
       ),
+      'vid' => array(
+        'description' => 'The Primary identifier for this revision.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
       'type' => array(
-        'description' => 'The {flexinode_type}.type of a single flexinode.',
+        'description' => 'The type of a flexinode bundle.',
         'type' => 'varchar',
         'length' => 255,
         'not null' => TRUE,
         'default' => '',
       ),
-      'created' => array(
-        'description' => 'The Unix timestamp when the flexinode was created.',
-        'type' => 'int',
-        'not null' => TRUE,
-        'default' => 0,
-      ),
-      'changed' => array(
-        'description' => 'The Unix timestamp when the flexinode was most recently saved.',
+      'archived' => array(
+        'description' => 'Boolean indicating whether the item is archived.',
         'type' => 'int',
         'not null' => TRUE,
         'default' => 0,
       ),
     ),
-    'primary key' => array('flid'),
+    'unique keys' => array(
+      'flid_vid' => array('flid', 'vid'),
+      'vid' => array('vid')
+    ),
     'indexes' => array(
       'type' => array('type'),
+      'flid' => array('flid'),
     ),
+    'primary key' => array('flid'),
   );
 
   $schema['flexinode_type'] = array(
     'description' => 'Stores information about defined flexinode types.',
     'fields' => array(
-                  'id' => array(
-                    'type' => 'serial',
-                    'not null' => TRUE,
-                    'description' => 'Primary Key: Unique flexinode type identifier.',
-                  ),
-                  'type' => array(
-                    'description' => 'The machine-readable name of this flexinode type.',
-                    'type' => 'varchar',
-                    'length' => 255,
-                    'not null' => TRUE,
-                  ),
-                  'label' => array(
-                    'description' => 'The human-readable name of this flexinode type.',
-                    'type' => 'varchar',
-                    'length' => 255,
-                    'not null' => TRUE,
-                    'default' => '',
-                  ),
-                  'weight' => array(
-                    'type' => 'int',
-                    'not null' => TRUE,
-                    'default' => 0,
-                    'size' => 'tiny',
-                    'description' => 'The weight of this model type in relation to others.',
-                  ),
-                ) + entity_exportable_schema_fields(),
+      'id' => array(
+        'type' => 'serial',
+        'not null' => TRUE,
+        'description' => 'Primary Key: Unique flexinode type identifier.',
+      ),
+      'type' => array(
+        'description' => 'The machine-readable name of this flexinode type.',
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+      ),
+      'label' => array(
+        'description' => 'The human-readable name of this flexinode type.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'weight' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+        'size' => 'tiny',
+        'description' => 'The weight of this model type in relation to others.',
+      ),
+      'status' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        // Set the default to ENTITY_IN_DB without using the constant as it is not safe to use it at this point.
+        'default' => 0x02,
+        'size' => 'tiny',
+        'description' => 'The exportable status of the entity.',
+      ),
+      'module' => array(
+        'description' => 'The name of the providing module if the entity has been defined in code.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => FALSE,
+      ),
+    ),
     'primary key' => array('id'),
     'unique keys' => array(
       'type' => array('type'),
     ),
   );
+  $schema['flexinode_revision'] =
+    array(
+      'description' => 'The base table for flexinode revision.',
+      'fields' => array(
+        'flid' => array(
+          'description' => 'Primary Key: Identifier for a flexinode.',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+        ),
+        'vid' => array(
+          'description' => 'The Primary identifier for this revision.',
+          'type' => 'serial',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+        ),
+        'type' => array(
+          'description' => 'The {flexinode_type}.type of a single flexinode.',
+          'type' => 'varchar',
+          'length' => 255,
+          'not null' => TRUE,
+          'default' => '',
+        ),
+      ),
+      'primary key' => array('vid'),
+      'foreign keys' => array(
+        'flexinode' => array(
+          'table' => 'flexinode',
+          'columns' => array(
+            'flid' => 'flid'
+          ),
+        ),
+      ),
 
+      'indexes' => array(
+        'flid' => array('flid'),
+        'type' => array('type'),
+      ),
+    );
+  ;
   return $schema;
+}
+
+
+/** Added revisions and indexes on flid, unique keys for flexinode */
+function flexinode_update_1001() {
+  $schema = flexinode_schema();
+  db_create_table('flexinode_revision', $schema['flexinode_revision']);
+  db_add_field('flexinode', 'vid', $schema['flexinode']['fields']['vid']);
+  db_add_index('flexinode', 'flid', array('flid'));
+  db_add_unique_key('flexinode', 'flid_vid', array('flid', 'vid'));
+  return t('Added revision scheme and an index on flid');
+}
+
+/**
+ * remove created and updated
+ */
+function flexinode_update_1002() {
+  db_drop_field('flexinode', 'created');
+  db_drop_field('flexinode', 'changed');
+  db_drop_field('flexinode_revision', 'created');
+  db_drop_field('flexinode_revision', 'changed');
+  return t('Removed created and updated.');
+}
+
+/**
+ * add archived.
+ */
+function flexinode_update_1003() {
+  $schema = flexinode_schema();
+  db_add_field('flexinode', 'archived', $schema['flexinode']['fields']['archived']);
+  return t('Added archived to flexinode');
+}
+
+
+function flexinode_uninstall() {
+  $types = db_select('flexinode_type', 'ft')
+    ->fields('et')
+    ->execute()
+    ->fetchAllAssoc('name');
+
+  foreach ($types as $name => $type) {
+    field_attach_delete_bundle('flexinode_type', $name);
+  }
 }

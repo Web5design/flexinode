@@ -1,30 +1,4 @@
 <?php
-/**
- * @file
- * Contains both entityUIController derived classes for editing flexinode and
- * flexinode-type entities.
- *
- * @author : René Bakx (rene@71media.net)
- */
-
-/**
- * UI controller for the flexinode/
- *
- * Not that much to control, since a flexinode 100% dependend on its host entity.
- */
-class FlexinodeUIController extends EntityDefaultUIController {
-
-  /**
-   * Overrides hook_menu() defaults. Main reason for doing this is that
-   * there is no menu, flexinodes are hidden from the user at this moment.
-   */
-  public function hook_menu() {
-      return array();
-  }
-}
-
-
-
 
 /**
  * UI controller for the flexinode_type.
@@ -38,6 +12,10 @@ class FlexinodeTypeUIController extends EntityDefaultUIController {
      */
     public function hook_menu() {
         $items = parent::hook_menu();
+
+    /** admin/structure/flexinodes/manage/%flexinode_type
+     * /admin/structure/flexinodes/manage/3_column_per_row
+     * */
         $items[$this->path]['description'] = 'Manage flexinode types';
         foreach ($items as &$item){
           if (isset($item['access callback'])){
@@ -130,6 +108,7 @@ function flexinode_type_form($form, &$form_state, $flexinode_type, $op = 'edit')
  */
 function flexinode_type_form_submit(&$form, &$form_state) {
     $flexinode_type = entity_ui_form_submit_build_entity($form, $form_state);
+
     $flexinode_type->save();
     if ($form_state['triggering_element']['#parents'][0] === 'save_continue') {
         $form_state['redirect'] = 'admin/structure/flexinodes/manage/' . $flexinode_type->type . '/fields';
